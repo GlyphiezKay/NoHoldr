@@ -18,7 +18,7 @@ for (const name of ['index.js', 'qpdf.js', 'qpdf.wasm']) {
     copyFileSync(join(qpdfDir, name), new URL(name, engine));
 }
 copyFileSync(join(qpdfDir, '..', 'LICENSE'), new URL('qpdf-LICENSE.txt', engine));
-cpSync(join(qpdfDir, '..', 'THIRD_PARTY_LICENSES'), fileURLToPath(new URL('qpdf-third-party/', engine)), { recursive: true });
+copyFileSync(join(qpdfDir, '..', 'THIRD_PARTY_LICENSES'), new URL('qpdf-THIRD-PARTY-LICENSES.txt', engine));
 copyFileSync(new URL('./qpdf-browser-worker.mjs', import.meta.url), new URL('qpdf-worker.mjs', engine));
 copyFileSync(require.resolve('tesseract.js/dist/worker.min.js'), new URL('ocr/worker.min.js', engine));
 copyFileSync(require.resolve('tesseract.js/LICENSE.md'), new URL('ocr/LICENSE.txt', engine));
