@@ -6,19 +6,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Copy, Check, ArrowRightLeft, Clock } from "lucide-react";
 
+const CopyRow = ({ label, value, copiedValue, onCopy }: { label: string; value: string; copiedValue: string | null; onCopy: (value: string) => void }) => (
+    <div className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 transition-colors">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <button onClick={() => onCopy(value)} className="flex items-center gap-1.5 font-mono text-xs">
+            {value}
+            {copiedValue === value ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
+        </button>
+    </div>
+);
+
 export default function TimestampPage() {
     const [epoch, setEpoch] = useState("");
     const [dateStr, setDateStr] = useState("");
-    const [now, setNow] = useState(Date.now());
+    const [now, setNow] = useState<number | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
 
     // Live clock
     useEffect(() => {
-        const timer = setInterval(() => setNow(Date.now()), 1000);
-        return () => clearInterval(timer);
+        const update = () => setNow(Date.now());
+        const initial = setTimeout(update, 0);
+        const timer = setInterval(update, 1000);
+        return () => {
+            clearTimeout(initial);
+            clearInterval(timer);
+        };
     }, []);
 
-    const currentDate = new Date(now);
+    const unixNow = now === null ? null : Math.floor(now / 1000);
+    const currentDate = now === null ? null : new Date(now);
+    const today = now === null ? null : Math.floor(new Date(now).setHours(0, 0, 0, 0) / 1000);
 
     const epochToDate = (val: string) => {
         const num = parseInt(val);
@@ -47,7 +64,8 @@ export default function TimestampPage() {
     });
 
     const getRelative = (d: Date): string => {
-        const diff = Date.now() - d.getTime();
+        if (now === null) return "—";
+        const diff = now - d.getTime();
         const abs = Math.abs(diff);
         const suffix = diff > 0 ? "ago" : "from now";
 
@@ -65,16 +83,6 @@ export default function TimestampPage() {
         setTimeout(() => setCopied(null), 1500);
     };
 
-    const CopyRow = ({ label, value }: { label: string; value: string }) => (
-        <div className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 transition-colors">
-            <span className="text-xs text-muted-foreground">{label}</span>
-            <button onClick={() => copyValue(value)} className="flex items-center gap-1.5 font-mono text-xs">
-                {value}
-                {copied === value ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
-            </button>
-        </div>
-    );
-
     return (
         <div className="max-w-2xl mx-auto px-4 py-6">
             <div className="flex items-center gap-3 mb-6">
@@ -90,9 +98,9 @@ export default function TimestampPage() {
                     <Clock className="h-4 w-4 text-primary animate-pulse" />
                     <span className="text-sm font-medium">Current Time</span>
                 </div>
-                <p className="font-mono text-2xl font-bold">{Math.floor(now / 1000)}</p>
-                <p className="text-xs text-muted-foreground mt-1">{currentDate.toISOString()}</p>
-                <Button variant="ghost" size="sm" className="mt-2" onClick={() => copyValue(Math.floor(now / 1000).toString())}>
+                <p className="font-mono text-2xl font-bold">{unixNow ?? "—"}</p>
+                <p className="text-xs text-muted-foreground mt-1">{currentDate?.toISOString() ?? "—"}</p>
+                <Button variant="ghost" size="sm" className="mt-2" disabled={unixNow === null} onClick={() => unixNow !== null && copyValue(String(unixNow))}>
                     <Copy className="h-3 w-3 mr-1" />Copy Unix
                 </Button>
             </div>
@@ -115,10 +123,10 @@ export default function TimestampPage() {
                             const f = formatFull(parsedFromEpoch);
                             return (
                                 <>
-                                    <CopyRow label="UTC" value={f.utc} />
-                                    <CopyRow label="ISO 8601" value={f.iso} />
-                                    <CopyRow label="Local" value={f.local} />
-                                    <CopyRow label="Relative" value={f.relative} />
+                                    <CopyRow label="UTC" value={f.utc} copiedValue={copied} onCopy={copyValue} />
+                                    <CopyRow label="ISO 8601" value={f.iso} copiedValue={copied} onCopy={copyValue} />
+                                    <CopyRow label="Local" value={f.local} copiedValue={copied} onCopy={copyValue} />
+                                    <CopyRow label="Relative" value={f.relative} copiedValue={copied} onCopy={copyValue} />
                                 </>
                             );
                         })()}
@@ -144,10 +152,10 @@ export default function TimestampPage() {
                             const f = formatFull(parsedFromDate);
                             return (
                                 <>
-                                    <CopyRow label="Unix (seconds)" value={f.unix.toString()} />
-                                    <CopyRow label="Unix (ms)" value={f.unixMs.toString()} />
-                                    <CopyRow label="ISO 8601" value={f.iso} />
-                                    <CopyRow label="Relative" value={f.relative} />
+                                    <CopyRow label="Unix (seconds)" value={f.unix.toString()} copiedValue={copied} onCopy={copyValue} />
+                                    <CopyRow label="Unix (ms)" value={f.unixMs.toString()} copiedValue={copied} onCopy={copyValue} />
+                                    <CopyRow label="ISO 8601" value={f.iso} copiedValue={copied} onCopy={copyValue} />
+                                    <CopyRow label="Relative" value={f.relative} copiedValue={copied} onCopy={copyValue} />
                                 </>
                             );
                         })()}
@@ -161,20 +169,20 @@ export default function TimestampPage() {
                 <div className="space-y-1 text-xs">
                     <div className="flex justify-between text-muted-foreground">
                         <span>Start of today</span>
-                        <button onClick={() => setEpoch(Math.floor(new Date().setHours(0, 0, 0, 0) / 1000).toString())} className="font-mono hover:text-foreground">
-                            {Math.floor(new Date().setHours(0, 0, 0, 0) / 1000)}
+                        <button disabled={today === null} onClick={() => today !== null && setEpoch(String(today))} className="font-mono hover:text-foreground">
+                            {today ?? "—"}
                         </button>
                     </div>
                     <div className="flex justify-between text-muted-foreground">
                         <span>1 hour ago</span>
-                        <button onClick={() => setEpoch((Math.floor(Date.now() / 1000) - 3600).toString())} className="font-mono hover:text-foreground">
-                            {Math.floor(Date.now() / 1000) - 3600}
+                        <button disabled={unixNow === null} onClick={() => unixNow !== null && setEpoch(String(unixNow - 3600))} className="font-mono hover:text-foreground">
+                            {unixNow === null ? "—" : unixNow - 3600}
                         </button>
                     </div>
                     <div className="flex justify-between text-muted-foreground">
                         <span>24 hours ago</span>
-                        <button onClick={() => setEpoch((Math.floor(Date.now() / 1000) - 86400).toString())} className="font-mono hover:text-foreground">
-                            {Math.floor(Date.now() / 1000) - 86400}
+                        <button disabled={unixNow === null} onClick={() => unixNow !== null && setEpoch(String(unixNow - 86400))} className="font-mono hover:text-foreground">
+                            {unixNow === null ? "—" : unixNow - 86400}
                         </button>
                     </div>
                     <div className="flex justify-between text-muted-foreground">

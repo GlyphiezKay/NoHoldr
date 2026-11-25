@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ArrowLeft, Copy, Check, RefreshCw, Shield, Eye, EyeOff } from "lucide-react";
 
 const WORD_LIST = [
@@ -18,6 +17,25 @@ const WORD_LIST = [
 ];
 
 type Mode = "random" | "passphrase" | "pin";
+
+function randomIndex(size: number): number {
+    const values = new Uint32Array(1);
+    const limit = 2 ** 32 - (2 ** 32 % size);
+    do { crypto.getRandomValues(values); } while (values[0] >= limit);
+    return values[0] % size;
+}
+
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+    return (
+        <label className="flex items-center justify-between py-2 cursor-pointer">
+            <span className="text-sm">{label}</span>
+            <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}
+                className={`w-9 h-5 rounded-full transition-colors relative ${checked ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${checked ? "translate-x-4" : ""}`} />
+            </button>
+        </label>
+    );
+}
 
 export default function PasswordGeneratorPage() {
     const [mode, setMode] = useState<Mode>("random");
@@ -46,25 +64,19 @@ export default function PasswordGeneratorPage() {
     const generateOne = useCallback((): string => {
         if (mode === "passphrase") {
             const words = Array.from({ length: wordCount }, () => {
-                const arr = new Uint32Array(1);
-                crypto.getRandomValues(arr);
-                let w = WORD_LIST[arr[0] % WORD_LIST.length];
+                let w = WORD_LIST[randomIndex(WORD_LIST.length)];
                 if (capitalizeWords) w = w.charAt(0).toUpperCase() + w.slice(1);
                 return w;
             });
             let phrase = words.join(separator);
             if (addNumber) {
-                const n = new Uint32Array(1);
-                crypto.getRandomValues(n);
-                phrase += separator + (n[0] % 1000);
+                phrase += separator + randomIndex(1000);
             }
             return phrase;
         }
 
         if (mode === "pin") {
-            const array = new Uint32Array(pinLength);
-            crypto.getRandomValues(array);
-            return Array.from(array, (n) => (n % 10).toString()).join("");
+            return Array.from({ length: pinLength }, () => randomIndex(10).toString()).join("");
         }
 
         // Random mode
@@ -76,9 +88,7 @@ export default function PasswordGeneratorPage() {
         if (excludeAmbiguous) chars = chars.replace(/[0OoIl1|]/g, "");
         if (!chars) return "Enable at least one option";
 
-        const array = new Uint32Array(length);
-        crypto.getRandomValues(array);
-        return Array.from(array, (n) => chars[n % chars.length]).join("");
+        return Array.from({ length }, () => chars[randomIndex(chars.length)]).join("");
     }, [mode, length, uppercase, lowercase, numbers, symbols, excludeAmbiguous, wordCount, separator, capitalizeWords, addNumber, pinLength]);
 
     const generate = useCallback(() => {
@@ -116,19 +126,6 @@ export default function PasswordGeneratorPage() {
         if (score <= 5) return { label: "Strong", color: "bg-blue-500", percent: 75 };
         return { label: "Very Strong", color: "bg-green-500", percent: 100 };
     };
-
-    // Auto-generate on first render
-    useState(() => { generate(); });
-
-    const Toggle = ({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) => (
-        <label className="flex items-center justify-between py-2 cursor-pointer">
-            <span className="text-sm">{label}</span>
-            <button onClick={() => onChange(!checked)}
-                className={`w-9 h-5 rounded-full transition-colors relative ${checked ? "bg-primary" : "bg-muted-foreground/30"}`}>
-                <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${checked ? "translate-x-4" : ""}`} />
-            </button>
-        </label>
-    );
 
     const currentPassword = passwords[0] || "";
     const strength = getStrength(currentPassword);
@@ -198,7 +195,7 @@ export default function PasswordGeneratorPage() {
 
             {/* Generate + Bulk */}
             <div className="flex gap-2 mb-4">
-                <Button onClick={generate} className="flex-1 h-11">
+                <Button onClick={generate} disabled={mode === "random" && !uppercase && !lowercase && !numbers && !symbols} className="flex-1 h-11">
                     <RefreshCw className="h-4 w-4 mr-2" />Generate {bulkCount > 1 ? `(${bulkCount})` : ""}
                 </Button>
                 {passwords.length > 1 && (

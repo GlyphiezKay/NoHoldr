@@ -1,282 +1,243 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import Link from "next/link";
+import { useState } from "react";
+import { Download, Image as ImageIcon, X } from "lucide-react";
+import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
+import { FilePicker } from "@/components/ui/file-picker";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, Image as ImageIcon, Download, X, Lock, LockOpen } from "lucide-react";
-import JSZip from "jszip";
+import { downloadAsZip, downloadFile } from "@/lib/download-manager";
 
-interface ImageFile {
-    id: string;
-    file: File;
-    name: string;
-    width: number;
-    height: number;
-    resizedUrl?: string;
+type Size = { width: number; height: number };
+type Source = Size & { id: string; file: File };
+type Output = Size & { name: string; blob: Blob };
+type Mode = "fit" | "exact" | "scale";
+
+const modes = [
+  { value: "fit", label: "Fit within", hint: "Each image keeps its own proportions and fits inside the width and height you enter." },
+  { value: "exact", label: "Exact size", hint: "Every image uses these exact dimensions. This can stretch the image." },
+  { value: "scale", label: "Scale (%)", hint: "Resize each image by the same percentage of its original size." },
+] as const;
+
+const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const maxPixels = 32_000_000;
+
+async function decode(file: File) {
+  const image = new window.Image();
+  const url = URL.createObjectURL(file);
+  try {
+    image.src = url;
+    await image.decode();
+    return image;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function resize(source: Source, size: Size, outputType: string) {
+  const image = await decode(source.file);
+  const canvas = document.createElement("canvas");
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas is unavailable");
+  const type = outputType || (extensions[source.file.type] ? source.file.type : "image/png");
+  if (type === "image/jpeg") {
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, size.width, size.height);
+  }
+  ctx.drawImage(image, 0, 0, size.width, size.height);
+  try {
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Image encoding failed")), type, 0.92);
+    });
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 }
 
 export default function ResizeImagePage() {
-    const [images, setImages] = useState<ImageFile[]>([]);
-    const [mode, setMode] = useState<"dimensions" | "percentage">("dimensions");
-    const [width, setWidth] = useState("");
-    const [height, setHeight] = useState("");
-    const [percentage, setPercentage] = useState("50");
-    const [maintainAspect, setMaintainAspect] = useState(true);
-    const [isDragging, setIsDragging] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [progress, setProgress] = useState(0);
+  const [images, setImages] = useState<Source[]>([]);
+  const [outputs, setOutputs] = useState<Record<string, Output>>({});
+  const [mode, setMode] = useState<Mode>("fit");
+  const [width, setWidth] = useState("1920");
+  const [height, setHeight] = useState("1080");
+  const [percent, setPercent] = useState("50");
+  const [outputType, setOutputType] = useState("");
+  const [status, setStatus] = useState<"idle" | "reading" | "resizing" | "zip">("idle");
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState("");
+  const busy = status !== "idle";
 
-    const addImages = async (files: File[]) => {
-        const newImages: ImageFile[] = [];
-        for (const file of files) {
-            if (!file.type.startsWith("image/")) continue;
-            const dims = await getImageDimensions(file);
-            newImages.push({
-                id: crypto.randomUUID(),
-                file,
-                name: file.name,
-                width: dims.width,
-                height: dims.height,
-            });
+  function target(source: Size): Size | null {
+    if (mode === "scale") {
+      const value = Number(percent);
+      if (!Number.isFinite(value) || value <= 0 || value > 500) return null;
+      return { width: Math.max(1, Math.round(source.width * value / 100)), height: Math.max(1, Math.round(source.height * value / 100)) };
+    }
+    const w = Number(width);
+    const h = Number(height);
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) return null;
+    if (mode === "exact") return { width: w, height: h };
+    const ratio = Math.min(w / source.width, h / source.height);
+    return { width: Math.max(1, Math.round(source.width * ratio)), height: Math.max(1, Math.round(source.height * ratio)) };
+  }
+
+  async function addImages(files: File[]) {
+    setStatus("reading");
+    setError("");
+    try {
+      const added: Source[] = [];
+      const failed: string[] = [];
+      for (const file of files) {
+        try {
+          const image = await decode(file);
+          added.push({ id: crypto.randomUUID(), file, width: image.naturalWidth, height: image.naturalHeight });
+        } catch {
+          failed.push(file.name);
         }
-        setImages(prev => [...prev, ...newImages]);
-        if (newImages.length > 0 && !width && !height) {
-            setWidth(String(newImages[0].width));
-            setHeight(String(newImages[0].height));
+      }
+      setImages(current => [...current, ...added]);
+      if (failed.length) setError("Could not open: " + failed.join(", ") + ". Choose an image supported by your browser.");
+    } finally {
+      setStatus("idle");
+    }
+  }
+
+  async function runResize() {
+    if (busy || !images.length) return;
+    const jobs = images.map(source => ({ source, size: target(source) }));
+    if (jobs.some(({ size }) => !size || size.width > 16_384 || size.height > 16_384 || size.width * size.height > maxPixels)) {
+      setError("Enter positive dimensions or a scale up to 500%. Each output must be at most 16,384 pixels per side and 32 megapixels.");
+      return;
+    }
+    setStatus("resizing");
+    setProgress(0);
+    setError("");
+    const finished: Record<string, Output> = {};
+    const names = new Set<string>();
+    const failed: string[] = [];
+    try {
+      for (const [index, { source, size }] of jobs.entries()) {
+        if (!size) continue;
+        try {
+          const blob = await resize(source, size, outputType);
+          const ext = extensions[blob.type] || "png";
+          const stem = source.file.name.replace(/\.[^.]+$/, "") + "_resized";
+          let name = stem + "." + ext;
+          for (let suffix = 2; names.has(name.toLowerCase()); suffix++) name = stem + "_" + suffix + "." + ext;
+          names.add(name.toLowerCase());
+          finished[source.id] = { ...size, name, blob };
+        } catch {
+          failed.push(source.file.name);
         }
-    };
+        setProgress(Math.round((index + 1) / jobs.length * 100));
+      }
+      setOutputs(finished);
+      if (failed.length) setError("Could not resize: " + failed.join(", ") + ".");
+    } finally {
+      setStatus("idle");
+    }
+  }
 
-    const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-                resolve({ width: img.width, height: img.height });
-                URL.revokeObjectURL(img.src);
-            };
-            img.src = URL.createObjectURL(file);
-        });
-    };
+  function removeImage(id: string) {
+    setImages(current => current.filter(image => image.id !== id));
+    setOutputs(current => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  }
 
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        addImages(Array.from(e.dataTransfer.files));
-    }, []);
+  const results = Object.values(outputs);
+  async function downloadZip() {
+    setStatus("zip");
+    setError("");
+    try {
+      await downloadAsZip(results, "resized_images.zip");
+    } catch {
+      setError("Could not create the ZIP. You can still download each image separately.");
+    } finally {
+      setStatus("idle");
+    }
+  }
 
-    const handleWidthChange = (value: string) => {
-        setWidth(value);
-        if (maintainAspect && images.length > 0) {
-            const ratio = images[0].height / images[0].width;
-            setHeight(String(Math.round(parseInt(value || "0") * ratio)));
-        }
-    };
+  return (
+    <ToolWorkspace category="Image tools" backHref="/image" title="Resize Images" description="Resize one image or a batch and choose how the new dimensions are applied.">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+        <ToolPanel title="Images" description="Add images to compare their original and target sizes."
+          action={images.length > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setImages([]); setOutputs({}); setError(""); }}>Clear list</Button>}>
+          <FilePicker multiple accept="image/*" action={images.length ? "Add images" : "Choose images"}
+            hint="Or drop one or more images here." disabled={busy} onFiles={addImages} />
+          {status === "reading" && <p role="status" className="mt-3 text-sm text-muted-foreground">Reading images…</p>}
+          {images.length > 0 && (
+            <ul className="mt-4 space-y-2">
+              {images.map(image => {
+                const preview = target(image);
+                const output = outputs[image.id];
+                return (
+                  <li key={image.id} className="flex items-center gap-2 rounded-lg border bg-background p-2 sm:p-3">
+                    <ImageIcon aria-hidden="true" className="hidden size-5 shrink-0 text-primary sm:block" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold" title={image.file.name}>{image.file.name}</p>
+                      <p className="text-sm text-muted-foreground">{image.width} × {image.height}{preview && <> → {preview.width} × {preview.height}</>} px</p>
+                      {output && <p className="text-sm text-muted-foreground">Last output: {output.width} × {output.height} px</p>}
+                    </div>
+                    {output && <Button variant="outline" size="icon" aria-label={"Download " + output.name} disabled={busy} onClick={() => downloadFile(output.blob, output.name)}><Download /></Button>}
+                    <Button variant="ghost" size="icon" aria-label={"Remove " + image.file.name} disabled={busy} onClick={() => removeImage(image.id)}><X /></Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </ToolPanel>
 
-    const handleHeightChange = (value: string) => {
-        setHeight(value);
-        if (maintainAspect && images.length > 0) {
-            const ratio = images[0].width / images[0].height;
-            setWidth(String(Math.round(parseInt(value || "0") * ratio)));
-        }
-    };
-
-    const resizeImage = async (file: File, newWidth: number, newHeight: number): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement("canvas");
-                canvas.width = newWidth;
-                canvas.height = newHeight;
-                const ctx = canvas.getContext("2d");
-                if (!ctx) { reject(new Error("No context")); return; }
-                ctx.drawImage(img, 0, 0, newWidth, newHeight);
-                canvas.toBlob((blob) => {
-                    if (blob) resolve(URL.createObjectURL(blob));
-                    else reject(new Error("Failed"));
-                }, file.type || "image/jpeg", 0.92);
-            };
-            img.onerror = () => reject(new Error("Failed to load"));
-            img.src = URL.createObjectURL(file);
-        });
-    };
-
-    const handleResize = async () => {
-        if (images.length === 0) return;
-        setIsProcessing(true);
-        setProgress(0);
-
-        const updated = [...images];
-        for (let i = 0; i < updated.length; i++) {
-            setProgress(Math.round((i / updated.length) * 100));
-            try {
-                let newWidth: number, newHeight: number;
-                if (mode === "percentage") {
-                    const scale = parseInt(percentage) / 100;
-                    newWidth = Math.round(updated[i].width * scale);
-                    newHeight = Math.round(updated[i].height * scale);
-                } else {
-                    newWidth = parseInt(width) || updated[i].width;
-                    newHeight = parseInt(height) || updated[i].height;
-                }
-                updated[i].resizedUrl = await resizeImage(updated[i].file, newWidth, newHeight);
-            } catch (error) {
-                console.error(`Failed to resize ${updated[i].name}:`, error);
-            }
-        }
-
-        setImages(updated);
-        setProgress(100);
-        setIsProcessing(false);
-    };
-
-    const downloadImage = (img: ImageFile) => {
-        if (!img.resizedUrl) return;
-        const ext = img.file.type.split("/")[1] || "jpg";
-        const link = document.createElement("a");
-        link.href = img.resizedUrl;
-        link.download = img.name.replace(/\.[^.]+$/, "") + `_resized.${ext}`;
-        link.click();
-    };
-
-    const downloadAll = async () => {
-        const zip = new JSZip();
-        for (const img of images) {
-            if (img.resizedUrl) {
-                const response = await fetch(img.resizedUrl);
-                const blob = await response.blob();
-                const ext = img.file.type.split("/")[1] || "jpg";
-                zip.file(img.name.replace(/\.[^.]+$/, "") + `_resized.${ext}`, blob);
-            }
-        }
-        const zipBlob = await zip.generateAsync({ type: "blob" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(zipBlob);
-        link.download = "resized_images.zip";
-        link.click();
-    };
-
-    const hasResized = images.some(img => img.resizedUrl);
-
-    return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/image"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Resize Images</h1>
+        <ToolPanel title="Resize settings">
+          <fieldset disabled={busy} className="space-y-4">
+            <legend className="mb-2 text-sm font-medium">Sizing mode</legend>
+            <div className="grid grid-cols-3 gap-1 rounded-lg bg-accent p-1">
+              {modes.map(option => (
+                <label key={option.value} className="cursor-pointer rounded-md px-1 py-2 text-center text-sm font-medium has-checked:bg-card has-checked:shadow-xs has-focus-visible:outline-2">
+                  <input type="radio" name="resize-mode" className="sr-only" value={option.value} checked={mode === option.value} onChange={() => setMode(option.value)} />
+                  {option.label}
+                </label>
+              ))}
             </div>
-
-            {/* Drop Zone */}
-            <div
-                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors mb-4 ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-                onDrop={handleDrop}
-                onClick={() => document.getElementById("img-input")?.click()}
-            >
-                <input type="file" accept="image/*" multiple onChange={(e) => e.target.files && addImages(Array.from(e.target.files))} className="hidden" id="img-input" />
-                <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm"><span className="font-medium">Drop images</span> <span className="text-muted-foreground">or click</span></p>
-            </div>
-
-            {/* Image List */}
-            {images.length > 0 && (
-                <div className="border rounded-xl p-4 mb-4">
-                    <div className="flex justify-between items-center mb-3">
-                        <span className="text-sm font-medium">{images.length} image{images.length > 1 ? "s" : ""}</span>
-                        <Button variant="ghost" size="sm" onClick={() => setImages([])}>Clear</Button>
-                    </div>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {images.map((img) => (
-                            <div key={img.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm">
-                                <ImageIcon className="h-4 w-4 text-blue-500 shrink-0" />
-                                <span className="flex-1 truncate">{img.name}</span>
-                                <span className="text-xs text-muted-foreground">{img.width}×{img.height}</span>
-                                {img.resizedUrl && (
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => downloadImage(img)}>
-                                        <Download className="h-3 w-3" />
-                                    </Button>
-                                )}
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setImages(prev => prev.filter(i => i.id !== img.id))}>
-                                    <X className="h-3 w-3" />
-                                </Button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+            <p className="text-sm text-muted-foreground">{modes.find(option => option.value === mode)?.hint}</p>
+            {mode === "scale" ? (
+              <label className="block text-sm font-medium">Scale (%)
+                <Input className="mt-2" type="number" min="1" max="500" value={percent} onChange={event => setPercent(event.target.value)} />
+              </label>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-sm font-medium">Width (px)
+                  <Input className="mt-2" type="number" min="1" value={width} onChange={event => setWidth(event.target.value)} />
+                </label>
+                <label className="block text-sm font-medium">Height (px)
+                  <Input className="mt-2" type="number" min="1" value={height} onChange={event => setHeight(event.target.value)} />
+                </label>
+              </div>
             )}
-
-            {/* Resize Options */}
-            {images.length > 0 && (
-                <div className="border rounded-xl p-4 mb-4 space-y-4">
-                    {/* Mode Toggle */}
-                    <div className="flex bg-muted rounded-lg p-1">
-                        <button
-                            onClick={() => setMode("dimensions")}
-                            className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${mode === "dimensions" ? "bg-background shadow-sm" : ""}`}
-                        >
-                            Dimensions
-                        </button>
-                        <button
-                            onClick={() => setMode("percentage")}
-                            className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${mode === "percentage" ? "bg-background shadow-sm" : ""}`}
-                        >
-                            Percentage
-                        </button>
-                    </div>
-
-                    {mode === "dimensions" ? (
-                        <>
-                            <div className="flex gap-3 items-end">
-                                <div className="flex-1">
-                                    <label className="text-xs text-muted-foreground mb-1 block">Width (px)</label>
-                                    <Input type="number" value={width} onChange={e => handleWidthChange(e.target.value)} />
-                                </div>
-                                <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setMaintainAspect(!maintainAspect)}>
-                                    {maintainAspect ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}
-                                </Button>
-                                <div className="flex-1">
-                                    <label className="text-xs text-muted-foreground mb-1 block">Height (px)</label>
-                                    <Input type="number" value={height} onChange={e => handleHeightChange(e.target.value)} />
-                                </div>
-                            </div>
-                            <p className="text-xs text-muted-foreground">{maintainAspect ? "Aspect ratio locked" : "Free resize"}</p>
-                        </>
-                    ) : (
-                        <>
-                            <div className="w-32">
-                                <label className="text-xs text-muted-foreground mb-1 block">Scale (%)</label>
-                                <Input type="number" min="1" max="500" value={percentage} onChange={e => setPercentage(e.target.value)} />
-                            </div>
-                            {images[0] && (
-                                <p className="text-xs text-muted-foreground">
-                                    {images[0].width}×{images[0].height} → {Math.round(images[0].width * parseInt(percentage || "100") / 100)}×{Math.round(images[0].height * parseInt(percentage || "100") / 100)}
-                                </p>
-                            )}
-                        </>
-                    )}
-                </div>
-            )}
-
-            {/* Progress */}
-            {isProcessing && <Progress value={progress} className="h-1.5 mb-4" />}
-
-            {/* Actions */}
-            {images.length > 0 && (
-                <div className="flex gap-2">
-                    <Button onClick={handleResize} disabled={isProcessing} className="flex-1">
-                        {hasResized ? "Re-resize" : "Resize"}
-                    </Button>
-                    {hasResized && images.length > 1 && (
-                        <Button variant="outline" onClick={downloadAll}>
-                            <Download className="h-4 w-4 mr-2" />ZIP
-                        </Button>
-                    )}
-                </div>
-            )}
-
-            <p className="text-xs text-muted-foreground text-center mt-6">Processed locally</p>
-        </div>
-    );
+            <label className="block text-sm font-medium">Output format
+              <select className="mt-2 block h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-2" value={outputType}
+                onChange={event => setOutputType(event.target.value)}>
+                <option value="">Use source format when supported</option>
+                <option value="image/png">PNG</option>
+                <option value="image/jpeg">JPEG</option>
+                <option value="image/webp">WebP</option>
+              </select>
+            </label>
+          </fieldset>
+          <Button size="lg" className="mt-5 w-full" disabled={busy || !images.length} onClick={runResize}>
+            {status === "resizing" ? "Resizing…" : "Resize images"}
+          </Button>
+          {results.length > 1 && <Button variant="outline" className="mt-2 w-full" disabled={busy} onClick={downloadZip}><Download /> {status === "zip" ? "Preparing ZIP…" : "Download ZIP"}</Button>}
+          {status === "resizing" && <Progress aria-label="Resize progress" className="mt-4" value={progress} />}
+          {error && <p role="alert" className="mt-3 wrap-anywhere text-sm text-destructive">{error}</p>}
+        </ToolPanel>
+      </div>
+    </ToolWorkspace>
+  );
 }

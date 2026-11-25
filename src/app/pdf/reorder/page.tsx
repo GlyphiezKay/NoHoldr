@@ -218,6 +218,7 @@ export default function ReorderPagesPage() {
                                         <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
 
                                         {page.thumbnail && (
+                                            // eslint-disable-next-line @next/next/no-img-element -- Local file previews stay in the browser.
                                             <img
                                                 src={page.thumbnail}
                                                 alt={page.label}

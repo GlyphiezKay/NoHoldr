@@ -13,9 +13,21 @@ export default function LegalPage() {
             </div>
 
             <div className="space-y-4 text-sm">
+                <section className="p-4 rounded-xl border">
+                    <h2 className="font-medium mb-2">MIT License</h2>
+                    <p className="text-muted-foreground">
+                        NoHoldr is licensed under the <a href="https://github.com/GlyphiezKay/NoHoldr/blob/main/LICENSE" className="underline hover:text-foreground">MIT License</a>.
+                        Effective November 25, 2026, the NoHoldr Attribution License (NAL) is retired
+                        and no longer applies to this project. The MIT License replaces NAL and its additional requirements.
+                    </p>
+                    <p className="text-muted-foreground mt-2">
+                        These legal notes are informational and do not add conditions to the MIT License.
+                        Third-party components remain subject to their own licenses.
+                    </p>
+                </section>
                 <section className="p-4 rounded-xl border bg-muted/30">
                     <p className="text-muted-foreground">
-                        This software is provided <strong>"AS IS"</strong> without warranty.
+                        This software is provided <strong>&quot;AS IS&quot;</strong> without warranty.
                     </p>
                 </section>
 
@@ -42,7 +54,7 @@ export default function LegalPage() {
                 <section className="p-4 rounded-xl border">
                     <h2 className="font-medium mb-1">Contact</h2>
                     <p className="text-muted-foreground">
-                        GitHub: <a href="https://github.com/Deviantkay" className="underline hover:text-foreground">Deviantkay</a>
+                        GitHub: <a href="https://github.com/GlyphiezKay" className="underline hover:text-foreground">GlyphiezKay</a>
                     </p>
                 </section>
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import {
     ArrowLeft, Sparkles, MessageSquare, FileText, Image, Wand2,
     Key, Shield, ExternalLink, Check, X, AlertTriangle
 } from "lucide-react";
-import { getApiKey, setApiKey, clearApiKey, hasApiKey } from "@/lib/gemini";
+import { setApiKey, clearApiKey, hasApiKey, subscribeToApiKey } from "@/lib/gemini";
 
 const tools = [
     {
@@ -39,24 +39,18 @@ const tools = [
 
 export default function AIHubPage() {
     const [apiKey, setApiKeyState] = useState("");
-    const [hasKey, setHasKey] = useState(false);
+    const hasKey = useSyncExternalStore(subscribeToApiKey, hasApiKey, () => false);
     const [showKey, setShowKey] = useState(false);
-
-    useEffect(() => {
-        setHasKey(hasApiKey());
-    }, []);
 
     const handleSaveKey = () => {
         if (apiKey.trim()) {
             setApiKey(apiKey.trim());
-            setHasKey(true);
             setApiKeyState("");
         }
     };
 
     const handleClearKey = () => {
         clearApiKey();
-        setHasKey(false);
     };
 
     return (

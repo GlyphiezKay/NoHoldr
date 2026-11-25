@@ -5,8 +5,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, FileText, Download, Pen, Type, Eraser } from "lucide-react";
-import { PDFDocument, rgb } from "pdf-lib";
+import { ArrowLeft, Upload, FileText, Pen, Type, Eraser } from "lucide-react";
+import { PDFDocument } from "pdf-lib";
 import { downloadFile, formatBytes } from "@/lib/download-manager";
 
 type SignMode = "draw" | "type";
@@ -107,8 +107,11 @@ export default function SignPDFPage() {
     };
 
     // Generate signature from typed text
-    const generateTypedSig = () => {
-        if (!typedName.trim()) return;
+    const generateTypedSig = (name: string) => {
+        if (!name.trim()) {
+            setSignatureDataUrl(null);
+            return;
+        }
         const canvas = document.createElement("canvas");
         canvas.width = 400;
         canvas.height = 120;
@@ -116,16 +119,9 @@ export default function SignPDFPage() {
         ctx.font = "italic 48px 'Georgia', 'Times New Roman', serif";
         ctx.fillStyle = "#1a1a2e";
         ctx.textBaseline = "middle";
-        ctx.fillText(typedName, 10, 60);
+        ctx.fillText(name, 10, 60);
         setSignatureDataUrl(canvas.toDataURL("image/png"));
     };
-
-    useEffect(() => {
-        if (mode === "type") {
-            generateTypedSig();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [typedName, mode]);
 
     const hasSignature = signatureDataUrl !== null;
 
@@ -226,7 +222,7 @@ export default function SignPDFPage() {
                             <Pen className="h-3.5 w-3.5" />Draw
                         </button>
                         <button
-                            onClick={() => { setMode("type"); clearCanvas(); }}
+                            onClick={() => { setMode("type"); clearCanvas(); generateTypedSig(typedName); }}
                             className={`flex-1 py-2 px-3 text-sm rounded-md transition-colors flex items-center justify-center gap-2 ${mode === "type" ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
                         >
                             <Type className="h-3.5 w-3.5" />Type
@@ -263,12 +259,13 @@ export default function SignPDFPage() {
                                 <label className="text-sm font-medium mb-2 block">Type your name</label>
                                 <Input
                                     value={typedName}
-                                    onChange={(e) => setTypedName(e.target.value)}
+                                    onChange={(e) => { setTypedName(e.target.value); generateTypedSig(e.target.value); }}
                                     placeholder="Your name"
                                     className="mb-3"
                                 />
                                 {signatureDataUrl && (
                                     <div className="border rounded-lg p-3 bg-white">
+                                        {/* eslint-disable-next-line @next/next/no-img-element -- Local file previews stay in the browser. */}
                                         <img src={signatureDataUrl} alt="Typed signature preview" className="h-12 object-contain" />
                                     </div>
                                 )}

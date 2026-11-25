@@ -37,6 +37,10 @@ export default function PrivacyPage() {
                     </div>
                 </div>
 
+                <section className="p-4 rounded-xl border">
+                    <h2 className="font-medium mb-1">Optional AI features</h2>
+                    <p className="text-muted-foreground text-xs">When you use AI tools, selected content is sent directly to Google Gemini. Your API key is stored in your browser. Google&apos;s own terms and privacy practices apply.</p>
+                </section>
                 <section className="p-4 rounded-xl border border-amber-200 dark:border-amber-800">
                     <h2 className="font-medium mb-1">Limitations</h2>
                     <p className="text-muted-foreground text-xs">

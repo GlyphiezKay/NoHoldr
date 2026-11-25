@@ -5,9 +5,9 @@
 
 import { FileCategory } from "./file-detector";
 import {
-    Crop, Maximize, FileDown, Minimize2, RotateCw, Droplets, Info, Trash2,
-    Scissors, Merge, FileText, Hash, BookOpen, Lock, Unlock, Image,
-    Music, Video, FileArchive, Database, ArrowRightLeft, Wand2
+    Crop, Maximize, Minimize2, RotateCw, Droplets, Info, Trash2,
+    Scissors, Merge, FileText, Hash, BookOpen, Image,
+    Music, FileArchive, Database, ArrowRightLeft, Wand2
 } from "lucide-react";
 
 export interface Tool {
@@ -149,7 +149,7 @@ export function getAvailableTools(category: FileCategory): ToolAvailability[] {
         .map(tool => ({ tool, available: true }));
 
     const locked: ToolAvailability[] = lockedInfo
-        .map(({ toolId, reason }) => TOOLS[toolId])
+        .map(({ toolId }) => TOOLS[toolId])
         .filter(Boolean)
         .map((tool, i) => ({
             tool,

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import Link from "next/link";
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
+import { FilePicker } from "@/components/ui/file-picker";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, Image as ImageIcon, Download, Crop, RotateCcw, RotateCw, RefreshCcw, X, Move } from "lucide-react";
-import JSZip from "jszip";
+import { Image as ImageIcon, Download, Crop, RotateCcw, RotateCw, RefreshCcw, X, Move } from "lucide-react";
+import { downloadAsZip, downloadFile } from "@/lib/download-manager";
+import { encodeCanvas, makeImageCanvas, openLocalImage, uniqueImageName } from "@/lib/image-processing";
 
 interface ImageFile {
     id: string;
@@ -47,7 +49,8 @@ export default function CropImagePage() {
     const [rotation, setRotation] = useState(0);
     const [outputFormat, setOutputFormat] = useState("image/jpeg");
     const [quality, setQuality] = useState(92);
-    const [isDragging, setIsDragging] = useState(false);
+    const [error, setError] = useState("");
+    const previewUrls = useRef(new Set<string>());
 
     // Drag state
     const [dragging, setDragging] = useState<"move" | "nw" | "ne" | "sw" | "se" | null>(null);
@@ -64,7 +67,8 @@ export default function CropImagePage() {
     const imgRef = useRef<HTMLImageElement>(null);
 
     const handleFile = useCallback((f: File) => {
-        if (!f.type.startsWith("image/")) return;
+        setError("");
+        setNaturalSize({ w: 0, h: 0 });
         setFile(f);
         const url = URL.createObjectURL(f);
         setImageUrl(url);
@@ -79,8 +83,18 @@ export default function CropImagePage() {
             setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
             setCrop({ x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight });
         };
+        img.onerror = () => setError("Could not decode this image.");
         img.src = imageUrl;
+        return () => {
+            img.onload = img.onerror = null;
+            URL.revokeObjectURL(imageUrl);
+        };
     }, [imageUrl]);
+
+    useEffect(() => {
+        const urls = previewUrls.current;
+        return () => urls.forEach(url => URL.revokeObjectURL(url));
+    }, []);
 
     // Get displayed image rect
     const getImageRect = () => {
@@ -89,22 +103,21 @@ export default function CropImagePage() {
         return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
     };
 
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        if (mode === "manual" && e.dataTransfer.files[0]) {
-            handleFile(e.dataTransfer.files[0]);
-        } else {
-            addBatchImages(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")));
-        }
-    }, [mode, handleFile]);
-
     const addBatchImages = (files: File[]) => {
-        setBatchImages(prev => [...prev, ...files.map(f => ({
-            id: crypto.randomUUID(),
-            file: f,
-            url: URL.createObjectURL(f),
-        }))]);
+        const added = files.map(file => {
+            const url = URL.createObjectURL(file);
+            previewUrls.current.add(url);
+            return { id: crypto.randomUUID(), file, url };
+        });
+        setError("");
+        setBatchImages(previous => [...previous, ...added]);
+    };
+
+    const clearBatch = () => {
+        previewUrls.current.forEach(url => URL.revokeObjectURL(url));
+        previewUrls.current.clear();
+        setBatchImages([]);
+        setError("");
     };
 
     const applyAspectRatio = (ratio: number) => {
@@ -147,10 +160,13 @@ export default function CropImagePage() {
         if (!dragging) return;
 
         const imgRect = getImageRect();
-        const scale = naturalSize.w / imgRect.width;
-
-        const dx = (e.clientX - startPos.x) * scale;
-        const dy = (e.clientY - startPos.y) * scale;
+        const scale = naturalSize.w / ((rotation === 90 || rotation === 270) ? imgRect.height : imgRect.width);
+        if (!Number.isFinite(scale)) return;
+        const horizontal = e.clientX - startPos.x;
+        const vertical = e.clientY - startPos.y;
+        const angle = rotation * Math.PI / 180;
+        const dx = (horizontal * Math.cos(angle) + vertical * Math.sin(angle)) * scale;
+        const dy = (-horizontal * Math.sin(angle) + vertical * Math.cos(angle)) * scale;
 
         let newCrop = { ...startCrop };
 
@@ -217,86 +233,73 @@ export default function CropImagePage() {
         setDragging(null);
     };
 
-    const downloadCropped = () => {
-        if (!imageUrl || !file) return;
-
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            if (!ctx) return;
-
-            canvas.width = crop.w;
-            canvas.height = crop.h;
-            ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
-
-            const ext = OUTPUT_FORMATS.find(f => f.value === outputFormat)?.ext || "jpg";
-            canvas.toBlob((blob) => {
-                if (!blob) return;
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
-                a.download = file.name.replace(/\.[^.]+$/, `_cropped.${ext}`);
-                a.click();
-            }, outputFormat, quality / 100);
-        };
-        img.src = imageUrl;
+    const downloadCropped = async () => {
+        if (!file || isProcessing || !naturalSize.w) return;
+        setError("");
+        setIsProcessing(true);
+        try {
+            const image = await openLocalImage(file);
+            const swap = rotation === 90 || rotation === 270;
+            const { canvas, context } = makeImageCanvas(Math.round(swap ? crop.h : crop.w), Math.round(swap ? crop.w : crop.h));
+            try {
+                if (outputFormat === "image/jpeg") {
+                    context.fillStyle = "#fff";
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+                }
+                context.translate(canvas.width / 2, canvas.height / 2);
+                context.rotate(rotation * Math.PI / 180);
+                context.drawImage(image, crop.x, crop.y, crop.w, crop.h, -crop.w / 2, -crop.h / 2, crop.w, crop.h);
+                const ext = OUTPUT_FORMATS.find(format => format.value === outputFormat)?.ext ?? "jpg";
+                downloadFile(await encodeCanvas(canvas, outputFormat, quality / 100), file.name.replace(/\.[^.]+$/, "") + "_cropped." + ext);
+            } finally {
+                canvas.width = canvas.height = 0;
+            }
+        } catch (reason) {
+            setError(reason instanceof Error ? reason.message : "Could not crop this image.");
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const autoCropBatch = async () => {
-        if (batchImages.length === 0) return;
+        if (!batchImages.length || isProcessing) return;
+        setError("");
         setIsProcessing(true);
         setProgress(0);
-
-        const zip = new JSZip();
-
-        for (let i = 0; i < batchImages.length; i++) {
-            setProgress(Math.round((i / batchImages.length) * 100));
-            const imgFile = batchImages[i];
-
-            const image = new Image();
-            await new Promise<void>((resolve) => {
-                image.onload = () => resolve();
-                image.src = imgFile.url;
-            });
-
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            if (!ctx) continue;
-
-            const srcW = image.width;
-            const srcH = image.height;
-            let cW: number, cH: number, cX: number, cY: number;
-
-            if (srcW / srcH > autoAspectRatio) {
-                cH = srcH;
-                cW = srcH * autoAspectRatio;
-                cX = (srcW - cW) / 2;
-                cY = 0;
-            } else {
-                cW = srcW;
-                cH = srcW / autoAspectRatio;
-                cX = 0;
-                cY = (srcH - cH) / 2;
+        const ready: { name: string; blob: Blob }[] = [];
+        const skipped: string[] = [];
+        const names = new Set<string>();
+        const ext = OUTPUT_FORMATS.find(format => format.value === outputFormat)?.ext ?? "jpg";
+        try {
+            for (const [index, { file }] of batchImages.entries()) {
+                try {
+                    const image = await openLocalImage(file);
+                    const w = Math.max(1, Math.min(image.naturalWidth, Math.round(image.naturalHeight * autoAspectRatio)));
+                    const h = Math.max(1, Math.min(image.naturalHeight, Math.round(image.naturalWidth / autoAspectRatio)));
+                    const { canvas, context } = makeImageCanvas(w, h);
+                    try {
+                        if (outputFormat === "image/jpeg") {
+                            context.fillStyle = "#fff";
+                            context.fillRect(0, 0, w, h);
+                        }
+                        context.drawImage(image, (image.naturalWidth - w) / 2, (image.naturalHeight - h) / 2, w, h, 0, 0, w, h);
+                        ready.push({ blob: await encodeCanvas(canvas, outputFormat, quality / 100),
+                            name: uniqueImageName(file.name.replace(/\.[^.]+$/, "") + "_cropped." + ext, names) });
+                    } finally {
+                        canvas.width = canvas.height = 0;
+                    }
+                } catch {
+                    skipped.push(file.name);
+                }
+                setProgress(Math.round((index + 1) / batchImages.length * 100));
             }
-
-            canvas.width = cW;
-            canvas.height = cH;
-            ctx.drawImage(image, cX, cY, cW, cH, 0, 0, cW, cH);
-
-            const blob = await new Promise<Blob>((resolve) =>
-                canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.92)
-            );
-            zip.file(imgFile.file.name.replace(/\.[^.]+$/, "_cropped.jpg"), blob);
+            if (ready.length) await downloadAsZip(ready, "cropped_images.zip");
+            if (skipped.length) setError("Could not crop: " + skipped.join(", ") + ".");
+        } catch {
+            setError("Could not create the crop ZIP.");
+        } finally {
+            setIsProcessing(false);
         }
-
-        setProgress(100);
-        const zipBlob = await zip.generateAsync({ type: "blob" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(zipBlob);
-        a.download = "cropped_images.zip";
-        a.click();
-
-        setIsProcessing(false);
     };
 
     // Calculate display crop box (percentage based)
@@ -308,24 +311,18 @@ export default function CropImagePage() {
     } : {};
 
     return (
-        <div className="max-w-3xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/image"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Crop Image</h1>
-            </div>
-
+        <ToolWorkspace category="Image tools" backHref="/image" title="Crop Images" description="Crop one image by hand or center-crop a batch to the same aspect ratio.">
+          <div className="mx-auto max-w-3xl">
             {/* Mode Toggle */}
             <div className="flex bg-muted rounded-lg p-1 mb-4">
                 <button
-                    onClick={() => setMode("manual")}
+                    disabled={isProcessing} onClick={() => setMode("manual")}
                     className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${mode === "manual" ? "bg-background shadow-sm" : ""}`}
                 >
                     <Crop className="h-4 w-4 inline mr-2" />Manual Crop
                 </button>
                 <button
-                    onClick={() => setMode("auto")}
+                    disabled={isProcessing} onClick={() => setMode("auto")}
                     className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${mode === "auto" ? "bg-background shadow-sm" : ""}`}
                 >
                     <ImageIcon className="h-4 w-4 inline mr-2" />Auto Batch
@@ -335,23 +332,14 @@ export default function CropImagePage() {
             {mode === "manual" ? (
                 <>
                     {!file ? (
-                        <div
-                            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
-                            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                            onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-                            onDrop={handleDrop}
-                            onClick={() => document.getElementById("img-input")?.click()}
-                        >
-                            <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} className="hidden" id="img-input" />
-                            <ImageIcon className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                            <p className="text-sm"><span className="font-medium">Drop image</span> <span className="text-muted-foreground">or tap</span></p>
-                        </div>
+                        <FilePicker accept="image/*" action="Choose image" hint="Or drop an image here." disabled={isProcessing}
+                            onFiles={files => files.length === 1 ? handleFile(files[0]) : setError("Choose one image.")} />
                     ) : (
                         <>
                             <div className="border rounded-xl p-4 mb-4">
                                 <div className="flex items-center justify-between mb-4">
                                     <span className="text-sm font-medium">{file.name}</span>
-                                    <Button variant="ghost" size="sm" onClick={() => { setFile(null); setImageUrl(null); }}>
+                                    <Button variant="ghost" size="sm" aria-label="Remove image" disabled={isProcessing} onClick={() => { setFile(null); setImageUrl(null); setError(""); }}>
                                         <X className="h-4 w-4" />
                                     </Button>
                                 </div>
@@ -364,6 +352,7 @@ export default function CropImagePage() {
                                     onPointerUp={handlePointerUp}
                                     onPointerLeave={handlePointerUp}
                                 >
+                                    {/* eslint-disable-next-line @next/next/no-img-element -- Local file previews stay in the browser. */}
                                     <img
                                         ref={imgRef}
                                         src={imageUrl || ""}
@@ -432,8 +421,8 @@ export default function CropImagePage() {
                             {/* Controls */}
                             <div className="border rounded-xl p-4 mb-4 space-y-4">
                                 <div className="flex flex-wrap gap-2">
-                                    <Button variant="outline" size="sm" onClick={rotateLeft}><RotateCcw className="h-4 w-4" /></Button>
-                                    <Button variant="outline" size="sm" onClick={rotateRight}><RotateCw className="h-4 w-4" /></Button>
+                                    <Button variant="outline" size="sm" aria-label="Rotate left" onClick={rotateLeft}><RotateCcw className="h-4 w-4" /></Button>
+                                    <Button variant="outline" size="sm" aria-label="Rotate right" onClick={rotateRight}><RotateCw className="h-4 w-4" /></Button>
                                     <Button variant="outline" size="sm" onClick={resetCrop}><RefreshCcw className="h-4 w-4 mr-1" />Reset</Button>
                                 </div>
 
@@ -482,7 +471,7 @@ export default function CropImagePage() {
                                 </div>
                             </div>
 
-                            <Button onClick={downloadCropped} className="w-full h-11">
+                            <Button onClick={downloadCropped} disabled={isProcessing || !naturalSize.w || !crop.w || !crop.h} className="w-full h-11">
                                 <Download className="h-4 w-4 mr-2" />Crop & Download
                             </Button>
                         </>
@@ -490,26 +479,18 @@ export default function CropImagePage() {
                 </>
             ) : (
                 <>
-                    <div
-                        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors mb-4 ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
-                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                        onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-                        onDrop={handleDrop}
-                        onClick={() => document.getElementById("batch-input")?.click()}
-                    >
-                        <input type="file" accept="image/*" multiple onChange={(e) => e.target.files && addBatchImages(Array.from(e.target.files))} className="hidden" id="batch-input" />
-                        <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                        <p className="text-sm"><span className="font-medium">Drop images</span> <span className="text-muted-foreground">for batch crop</span></p>
-                    </div>
+                    <FilePicker multiple accept="image/*" action={batchImages.length ? "Add images" : "Choose images"}
+                        hint="Or drop images for a batch crop." disabled={isProcessing} onFiles={addBatchImages} />
 
                     {batchImages.length > 0 && (
                         <div className="border rounded-xl p-4 mb-4">
                             <div className="flex justify-between items-center mb-3">
                                 <span className="text-sm font-medium">{batchImages.length} images</span>
-                                <Button variant="ghost" size="sm" onClick={() => setBatchImages([])}>Clear</Button>
+                                <Button variant="ghost" size="sm" disabled={isProcessing} onClick={clearBatch}>Clear</Button>
                             </div>
                             <div className="grid grid-cols-6 gap-2 max-h-24 overflow-y-auto">
                                 {batchImages.map(img => (
+                                    // eslint-disable-next-line @next/next/no-img-element -- Local file previews stay in the browser.
                                     <img key={img.id} src={img.url} alt="" className="w-full h-12 object-cover rounded-lg" />
                                 ))}
                             </div>
@@ -524,7 +505,7 @@ export default function CropImagePage() {
                                     key={r.label}
                                     variant={autoAspectRatio === r.value ? "default" : "outline"}
                                     size="sm"
-                                    onClick={() => setAutoAspectRatio(r.value)}
+                                    disabled={isProcessing} onClick={() => setAutoAspectRatio(r.value)}
                                 >
                                     {r.label}
                                 </Button>
@@ -533,7 +514,12 @@ export default function CropImagePage() {
                         <p className="text-xs text-muted-foreground mt-2">All images will be cropped from center to match the ratio</p>
                     </div>
 
-                    {isProcessing && <Progress value={progress} className="h-1.5 mb-4" />}
+                    <label className="mb-3 block text-sm font-medium">Batch output format
+                        <select aria-label="Batch output format" value={outputFormat} disabled={isProcessing} onChange={event => setOutputFormat(event.target.value)} className="mt-2 block h-10 w-full rounded border bg-background px-3">
+                            {OUTPUT_FORMATS.map(format => <option key={format.value} value={format.value}>{format.label}</option>)}
+                        </select>
+                    </label>
+                    {isProcessing && <Progress value={progress} aria-label="Crop progress" className="h-1.5 mb-4" />}
 
                     <Button onClick={autoCropBatch} disabled={isProcessing || batchImages.length === 0} className="w-full h-11">
                         <Download className="h-4 w-4 mr-2" />{isProcessing ? "Processing..." : "Batch Crop & Download ZIP"}
@@ -541,7 +527,8 @@ export default function CropImagePage() {
                 </>
             )}
 
-            <p className="text-xs text-muted-foreground text-center mt-6">Drag box to move • Drag corners to resize</p>
-        </div>
+            {error && <p role="alert" className="mt-4 text-sm text-destructive">{error}</p>}
+          </div>
+        </ToolWorkspace>
     );
 }

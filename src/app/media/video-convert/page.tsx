@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { recordVideo } from "@/lib/video-utils";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, Download, Video, AlertTriangle, Info } from "lucide-react";
+import { ArrowLeft, Download, Video, AlertTriangle, Info } from "lucide-react";
 import { downloadFile, formatBytes } from "@/lib/download-manager";
 
 export default function VideoConvertPage() {
@@ -47,76 +48,7 @@ export default function VideoConvertPage() {
         setStatusText("Loading video...");
 
         try {
-            const video = document.createElement("video");
-            const videoUrl = URL.createObjectURL(file);
-            video.src = videoUrl;
-            video.muted = false;
-
-            await new Promise<void>((resolve, reject) => {
-                video.onloadedmetadata = () => resolve();
-                video.onerror = () => reject(new Error("Failed to load video"));
-            });
-
-            setStatusText(`Converting (${Math.round(video.duration)}s video — runs at playback speed)...`);
-
-            const canvas = document.createElement("canvas");
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext("2d")!;
-
-            const stream = canvas.captureStream(30);
-
-            // Capture audio
-            try {
-                const audioCtx = new AudioContext();
-                const source = audioCtx.createMediaElementSource(video);
-                const dest = audioCtx.createMediaStreamDestination();
-                source.connect(dest);
-                source.connect(audioCtx.destination);
-                dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
-            } catch {
-                // Audio capture may fail — continue without audio
-            }
-
-            const recorder = new MediaRecorder(stream, { mimeType: outputFormat });
-            const chunks: Blob[] = [];
-
-            recorder.ondataavailable = (e) => chunks.push(e.data);
-
-            const resultPromise = new Promise<Blob>((resolve) => {
-                recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: outputFormat });
-                    resolve(blob);
-                };
-            });
-
-            recorder.start();
-            video.muted = true; // Mute actual playback, audio captured via AudioContext
-            video.play();
-
-            const duration = video.duration;
-            const drawFrame = () => {
-                if (abortRef.current) {
-                    video.pause();
-                    recorder.stop();
-                    return;
-                }
-                if (video.ended || video.paused) {
-                    recorder.stop();
-                    return;
-                }
-                ctx.drawImage(video, 0, 0);
-                setProgress(Math.round((video.currentTime / duration) * 100));
-                requestAnimationFrame(drawFrame);
-            };
-            drawFrame();
-
-            video.onended = () => {
-                recorder.stop();
-            };
-
-            const blob = await resultPromise;
-            URL.revokeObjectURL(videoUrl);
+            const blob = await recordVideo(file, { mimeType: outputFormat, cancelled: () => abortRef.current, onProgress: setProgress });
 
             if (abortRef.current) {
                 setIsProcessing(false);

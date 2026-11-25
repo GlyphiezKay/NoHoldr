@@ -32,23 +32,23 @@ export default function SplitPDFPage() {
     const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
     const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
 
-    const handleDrop = useCallback(async (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        const f = Array.from(e.dataTransfer.files).find(f => f.type === "application/pdf");
-        if (f) await loadPdf(f);
-    }, []);
-
-    const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) await loadPdf(e.target.files[0]);
-    }, []);
-
     const loadPdf = async (f: File) => {
         try {
             const pdf = await PDFDocument.load(await f.arrayBuffer());
             setFile(f);
             setPageCount(pdf.getPageCount());
         } catch { /* ignore */ }
+    };
+
+    const handleDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const f = Array.from(e.dataTransfer.files).find(f => f.type === "application/pdf");
+        if (f) await loadPdf(f);
+    };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) await loadPdf(e.target.files[0]);
     };
 
     const parseRanges = (input: string): number[][] => {

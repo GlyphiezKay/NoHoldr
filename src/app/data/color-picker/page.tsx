@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,11 +46,31 @@ function contrastText(hex: string): string {
     return (r * 299 + g * 587 + b * 114) / 1000 > 128 ? "#000000" : "#FFFFFF";
 }
 
+const CopyBtn = ({ value, label, copiedValue, onCopy }: { value: string; label: string; copiedValue: string | null; onCopy: (value: string) => void }) => (
+    <button
+        onClick={() => onCopy(value)}
+        className="flex items-center justify-between w-full px-3 py-2 rounded-lg hover:bg-muted/70 transition-colors text-sm"
+    >
+        <span className="text-muted-foreground">{label}</span>
+        <span className="flex items-center gap-1.5 font-mono text-xs">
+            {value}
+            {copiedValue === value ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
+        </span>
+    </button>
+);
+
+// EyeDropper support is fixed for the lifetime of the page.
+const subscribeToEyeDropperSupport = () => () => {};
+
 export default function ColorPickerPage() {
     const [color, setColor] = useState("#6366F1");
     const [saved, setSaved] = useState<string[]>([]);
     const [copied, setCopied] = useState<string | null>(null);
-    const [eyedropperSupported] = useState(() => typeof window !== "undefined" && "EyeDropper" in window);
+    const eyedropperSupported = useSyncExternalStore(
+        subscribeToEyeDropperSupport,
+        () => "EyeDropper" in window,
+        () => false,
+    );
     const pickerRef = useRef<HTMLInputElement>(null);
 
     const info = buildColorInfo(color);
@@ -112,19 +132,6 @@ export default function ColorPickerPage() {
 
     const palette = generatePalette(color);
 
-    const CopyBtn = ({ value, label }: { value: string; label: string }) => (
-        <button
-            onClick={() => copyValue(value)}
-            className="flex items-center justify-between w-full px-3 py-2 rounded-lg hover:bg-muted/70 transition-colors text-sm"
-        >
-            <span className="text-muted-foreground">{label}</span>
-            <span className="flex items-center gap-1.5 font-mono text-xs">
-                {value}
-                {copied === value ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
-            </span>
-        </button>
-    );
-
     return (
         <div className="max-w-2xl mx-auto px-4 py-6">
             <div className="flex items-center gap-3 mb-6">
@@ -167,10 +174,10 @@ export default function ColorPickerPage() {
 
             {/* Color values */}
             <div className="border rounded-xl overflow-hidden mb-4">
-                <CopyBtn value={info.hex} label="HEX" />
-                <CopyBtn value={`rgb(${info.rgb.r}, ${info.rgb.g}, ${info.rgb.b})`} label="RGB" />
-                <CopyBtn value={`hsl(${info.hsl.h}, ${info.hsl.s}%, ${info.hsl.l}%)`} label="HSL" />
-                <CopyBtn value={`${info.rgb.r}, ${info.rgb.g}, ${info.rgb.b}`} label="Tailwind" />
+                <CopyBtn value={info.hex} label="HEX" copiedValue={copied} onCopy={copyValue} />
+                <CopyBtn value={`rgb(${info.rgb.r}, ${info.rgb.g}, ${info.rgb.b})`} label="RGB" copiedValue={copied} onCopy={copyValue} />
+                <CopyBtn value={`hsl(${info.hsl.h}, ${info.hsl.s}%, ${info.hsl.l}%)`} label="HSL" copiedValue={copied} onCopy={copyValue} />
+                <CopyBtn value={`${info.rgb.r}, ${info.rgb.g}, ${info.rgb.b}`} label="Tailwind" copiedValue={copied} onCopy={copyValue} />
             </div>
 
             {/* Palettes */}

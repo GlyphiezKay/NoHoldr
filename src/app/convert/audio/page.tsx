@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload, Music, Download, Play, Info } from "lucide-react";
+import { ArrowLeft, Music, Download, Info } from "lucide-react";
 
 const OUTPUT_FORMATS = [
     { value: "wav", label: "WAV", desc: "Uncompressed, lossless", mime: "audio/wav" },

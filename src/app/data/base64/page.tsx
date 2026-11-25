@@ -4,6 +4,8 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Copy, Check, Upload, ArrowRightLeft } from "lucide-react";
+import { encodeBase64Text, decodeBase64Text, decodeBase64Bytes } from "@/lib/base64-utils";
+import { downloadFile } from "@/lib/download-manager";
 
 export default function Base64Page() {
     const [mode, setMode] = useState<"text" | "file">("text");
@@ -18,9 +20,9 @@ export default function Base64Page() {
         setError("");
         try {
             if (direction === "encode") {
-                setOutput(btoa(unescape(encodeURIComponent(input))));
+                setOutput(encodeBase64Text(input));
             } else {
-                setOutput(decodeURIComponent(escape(atob(input.trim()))));
+                setOutput(decodeBase64Text(input));
             }
         } catch {
             setError("Invalid input for " + direction + "ing");
@@ -34,26 +36,19 @@ export default function Base64Page() {
         const reader = new FileReader();
         reader.onload = () => {
             const result = reader.result as string;
-            const base64 = result.split(",")[1] || result;
+            const base64 = result.slice(result.indexOf(",") + 1);
             setOutput(base64);
             setInput(`data:${file.type};base64,...`);
         };
+        reader.onerror = () => { setOutput(""); setError("Unable to read this file."); };
         reader.readAsDataURL(file);
     };
 
     const handleFileDecode = () => {
         setError("");
         try {
-            const binary = atob(input.trim());
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            const blob = new Blob([bytes]);
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "decoded_file";
-            a.click();
-            URL.revokeObjectURL(url);
+            const bytes = decodeBase64Bytes(input);
+            downloadFile(new Blob([bytes]), "decoded_file");
         } catch {
             setError("Invalid base64 data");
         }

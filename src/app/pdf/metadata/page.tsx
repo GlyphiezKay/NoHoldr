@@ -3,8 +3,7 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, FileText, Eye } from "lucide-react";
+import { ArrowLeft, Upload, FileText } from "lucide-react";
 import { PDFDocument } from "pdf-lib";
 
 interface PDFMetadata {

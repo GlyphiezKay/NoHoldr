@@ -78,7 +78,7 @@ const MIME_CATEGORIES: Record<string, FileCategory> = {
 const EXTENSION_CATEGORIES: Record<string, FileCategory> = {
     // Images
     jpg: "image", jpeg: "image", png: "image", gif: "image",
-    webp: "image", svg: "image", bmp: "image", tiff: "image", ico: "image",
+    webp: "image", svg: "image", bmp: "image", tiff: "image", tif: "image", ico: "image", avif: "image", heic: "image", heif: "image",
 
     // PDF
     pdf: "pdf",
@@ -95,7 +95,7 @@ const EXTENSION_CATEGORIES: Record<string, FileCategory> = {
     mkv: "video", wmv: "video", flv: "video",
 
     // Data
-    json: "data", csv: "data", txt: "data", xml: "data",
+    json: "data", csv: "data", txt: "data", xml: "data", md: "data", markdown: "data", tsv: "data",
     xls: "data", xlsx: "data",
 
     // Archives
@@ -115,16 +115,20 @@ const CATEGORY_DISPLAY: Record<FileCategory, string> = {
 };
 
 export function detectFileType(file: File): DetectedFile {
-    const mimeType = file.type || "";
-    const extension = file.name.split(".").pop()?.toLowerCase() || "";
+    const mimeType = (file.type || "").split(";")[0].trim().toLowerCase();
+    const extension = file.name.includes(".") ? file.name.split(".").pop()?.toLowerCase() || "" : "";
 
     // Try MIME type first
-    let category = MIME_CATEGORIES[mimeType];
+    let category = Object.hasOwn(MIME_CATEGORIES, mimeType) ? MIME_CATEGORIES[mimeType] : undefined;
 
     // Fall back to extension
-    if (!category && extension) {
+    if ((!category || mimeType === "text/plain") && Object.hasOwn(EXTENSION_CATEGORIES, extension)) {
         category = EXTENSION_CATEGORIES[extension];
     }
+
+    if (!category && mimeType.startsWith("image/")) category = "image";
+    if (!category && mimeType.startsWith("audio/")) category = "audio";
+    if (!category && mimeType.startsWith("video/")) category = "video";
 
     // Default to unsupported
     if (!category) {

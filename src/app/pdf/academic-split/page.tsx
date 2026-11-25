@@ -47,17 +47,6 @@ export default function AcademicSplitPage() {
     const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
     const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
 
-    const handleDrop = useCallback(async (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        const droppedFile = Array.from(e.dataTransfer.files).find(f => f.type === "application/pdf");
-        if (droppedFile) await loadPdf(droppedFile);
-    }, []);
-
-    const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) await loadPdf(e.target.files[0]);
-    }, []);
-
     const loadPdf = async (pdfFile: File) => {
         try {
             const arrayBuffer = await pdfFile.arrayBuffer();
@@ -68,6 +57,17 @@ export default function AcademicSplitPage() {
         } catch (error) {
             console.error("Failed to load PDF:", error);
         }
+    };
+
+    const handleDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const droppedFile = Array.from(e.dataTransfer.files).find(f => f.type === "application/pdf");
+        if (droppedFile) await loadPdf(droppedFile);
+    };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) await loadPdf(e.target.files[0]);
     };
 
     const parsePageRanges = (input: string): { valid: boolean; pages: number[] } => {
@@ -116,7 +116,7 @@ export default function AcademicSplitPage() {
     const getOverlaps = (): number[] => {
         const counts: Map<number, number> = new Map();
         sections.forEach(s => s.parsedPages.forEach(p => counts.set(p, (counts.get(p) || 0) + 1)));
-        return Array.from(counts.entries()).filter(([_, c]) => c > 1).map(([p]) => p);
+        return Array.from(counts.entries()).filter(([, c]) => c > 1).map(([p]) => p);
     };
 
     const handleSplit = async () => {

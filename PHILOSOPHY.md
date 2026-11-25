@@ -97,4 +97,4 @@ Trust is earned, not claimed.
 
 ---
 
-*This philosophy applies to the original NoHoldr project by Deviantkay. Forks and derivatives may have different philosophies.*
+*This philosophy applies to the original NoHoldr project by GlyphiezKay. Forks and derivatives may have different philosophies.*

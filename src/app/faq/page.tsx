@@ -3,11 +3,11 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 const faqs = [
-    { q: "Are files uploaded?", a: "No. All processing happens in your browser." },
+    { q: "Are files uploaded?", a: "Regular file tools process locally. Optional AI features send selected content directly to Google Gemini when requested." },
     { q: "Are files stored?", a: "No. Files only exist in browser memory." },
     { q: "Is it 100% safe?", a: "No absolute guarantees. Browsers have inherent risks." },
-    { q: "Can I use offline?", a: "Yes, after initial load. AI features need network." },
-    { q: "Can I fork this?", a: "Yes. MIT license with attribution." },
+    { q: "Can I use offline?", a: "Local tools can run without a network once their required assets are loaded. AI features require a connection." },
+    { q: "Can I fork this?", a: "Yes. The MIT License permits forks and modifications. Keep the copyright and permission notice in copies or substantial portions of the software." },
 ];
 
 export default function FAQPage() {
@@ -30,7 +30,7 @@ export default function FAQPage() {
             </div>
 
             <a
-                href="https://github.com/Deviantkay/NoHoldr/issues"
+                href="https://github.com/GlyphiezKay/NoHoldr/issues"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-muted-foreground hover:text-foreground"

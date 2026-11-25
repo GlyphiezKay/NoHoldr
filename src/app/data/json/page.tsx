@@ -16,7 +16,7 @@ export default function JSONFormatPage() {
             const parsed = JSON.parse(input);
             setOutput(JSON.stringify(parsed, null, 2));
             setError("");
-        } catch (e) {
+        } catch {
             setError("Invalid JSON");
             setOutput("");
         }
@@ -27,7 +27,7 @@ export default function JSONFormatPage() {
             const parsed = JSON.parse(input);
             setOutput(JSON.stringify(parsed));
             setError("");
-        } catch (e) {
+        } catch {
             setError("Invalid JSON");
             setOutput("");
         }

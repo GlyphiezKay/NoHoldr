@@ -1,265 +1,148 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import Link from "next/link";
+import { useState } from "react";
+import { Download, FileText, Minimize2 } from "lucide-react";
+import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
+import { FilePicker } from "@/components/ui/file-picker";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, FileText, Download, Gauge, AlertTriangle } from "lucide-react";
-import { PDFDocument } from "pdf-lib";
 import { downloadFile, formatBytes } from "@/lib/download-manager";
+import { compressPdf, scanLevels, type CompressionOptions } from "@/lib/pdf-compression";
+
+const modes = [
+  { id: "text", name: "Keep text selectable", description: "Optimize the PDF structure without turning pages into images. Best for text documents. Savings may be small." },
+  { id: "scan", name: "Shrink scanned pages", description: "Rebuild pages as compressed images. Text selection, clickable links, and interactive forms are lost in the compressed copy." },
+] as const;
+const maxFileBytes = 200 * 1024 * 1024;
 
 export default function CompressPDFPage() {
-    const [file, setFile] = useState<File | null>(null);
-    const [quality, setQuality] = useState([70]);
-    const [isDragging, setIsDragging] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [progress, setProgress] = useState(0);
-    const [statusText, setStatusText] = useState("");
-    const [result, setResult] = useState<{ original: number; compressed: number; blob: Blob } | null>(null);
-    const [error, setError] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [mode, setMode] = useState<CompressionOptions["mode"]>("text");
+  const [level, setLevel] = useState<number>(1);
+  const [target, setTarget] = useState("");
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<{ blob: Blob; pages: number; targetBytes?: number; mode: CompressionOptions["mode"] } | null>(null);
+  const reduced = Boolean(file && result && result.blob.size < file.size);
 
-    // Cleanup blob on unmount / file change
-    useEffect(() => {
-        return () => {
-            if (result) URL.revokeObjectURL(URL.createObjectURL(result.blob));
-        };
-    }, [result]);
+  function selectFile(files: File[]) {
+    if (files.length !== 1) { setError("Choose one PDF at a time."); return; }
+    const source = files[0];
+    if (!(source.type === "application/pdf" || /\.pdf$/i.test(source.name))) {
+      setError("Choose a PDF file.");
+      return;
+    }
+    if (source.size > maxFileBytes || source.size === 0) {
+      setError("Choose a non-empty PDF up to 200 MB.");
+      return;
+    }
+    setError("");
+    setResult(null);
+    setFile(source);
+  }
 
-    const handleFile = useCallback(async (f: File) => {
-        if (f.type !== "application/pdf") {
-            setError("Please upload a PDF file.");
-            return;
-        }
-        if (f.size > 200 * 1024 * 1024) {
-            setError("File too large. Maximum 200 MB.");
-            return;
-        }
-        setFile(f);
-        setResult(null);
-        setError(null);
-    }, []);
+  async function run() {
+    if (!file || running) return;
+    const value = Number(target);
+    if (mode === "scan" && target && (!Number.isSafeInteger(value) || value < 1 || value > 204_800)) {
+      setError("Enter a whole number from 1 to 204800 KB or leave the target blank.");
+      return;
+    }
+    const targetBytes = mode === "scan" && target ? value * 1024 : undefined;
+    const options: CompressionOptions = mode === "text" ? { mode } : { mode, level, targetBytes };
+    setError("");
+    setResult(null);
+    setStatus("Opening PDF…");
+    setProgress(0);
+    setRunning(true);
+    try {
+      const output = await compressPdf(file, options, (percent, message) => {
+        setProgress(percent);
+        setStatus(message);
+      });
+      setResult({ ...output, targetBytes, mode });
+    } catch {
+      setError("Could not process this PDF. Check that the file opens normally and has no password protection.");
+    } finally {
+      setRunning(false);
+    }
+  }
 
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-    }, [handleFile]);
+  return (
+    <ToolWorkspace category="PDF tools" backHref="/pdf" title="Compress PDF" description="Reduce a PDF’s size for sharing or uploads, then compare the result with the original.">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+        <div className="space-y-5">
+          <ToolPanel title="Source PDF" action={file && <Button variant="ghost" size="sm" disabled={running} onClick={() => { setFile(null); setResult(null); setError(""); }}>Remove</Button>}>
+            {file && <div className="mb-4 flex items-center gap-3 rounded-lg border bg-background p-3">
+              <FileText className="size-5 shrink-0 text-primary" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold" title={file.name}>{file.name}</p>
+                <p className="text-sm text-muted-foreground">{formatBytes(file.size)}</p>
+              </div>
+            </div>}
+            <FilePicker accept=".pdf,application/pdf" onFiles={selectFile} action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF up to 200 MB here." disabled={running} />
+          </ToolPanel>
 
-    const compress = async () => {
-        if (!file) return;
-        setIsProcessing(true);
-        setProgress(5);
-        setError(null);
-        setResult(null);
-        setStatusText("Loading PDF...");
-
-        try {
-            // Dynamically import pdfjs to avoid SSR issues
-            const { pdfjsLib } = await import("@/lib/pdfjs-setup");
-
-            const arrayBuffer = await file.arrayBuffer();
-            setProgress(10);
-            setStatusText("Parsing PDF structure...");
-
-            const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            const numPages = pdfDoc.numPages;
-            setStatusText(`Compressing ${numPages} page${numPages > 1 ? "s" : ""}...`);
-
-            // Determine JPEG quality from slider (slider is 10-100, map to 0.1-1.0)
-            const jpegQuality = quality[0] / 100;
-            // Scale factor — lower quality = slightly lower resolution for more compression
-            const scaleFactor = quality[0] <= 30 ? 1.0 : quality[0] <= 60 ? 1.5 : 2.0;
-
-            // Create new PDF from rendered pages
-            const newPdf = await PDFDocument.create();
-
-            for (let i = 1; i <= numPages; i++) {
-                setProgress(10 + Math.round((i / numPages) * 80));
-                setStatusText(`Compressing page ${i} of ${numPages}...`);
-
-                const page = await pdfDoc.getPage(i);
-                const viewport = page.getViewport({ scale: scaleFactor });
-
-                // Render to canvas
-                const canvas = document.createElement("canvas");
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                const ctx = canvas.getContext("2d")!;
-
-                // White background for JPEG
-                ctx.fillStyle = "#ffffff";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await page.render({ canvasContext: ctx, viewport } as any).promise;
-
-                // Convert to JPEG bytes at specified quality
-                const jpegBlob = await new Promise<Blob>((resolve, reject) => {
-                    canvas.toBlob(
-                        (blob) => (blob ? resolve(blob) : reject(new Error(`Failed to render page ${i}`))),
-                        "image/jpeg",
-                        jpegQuality
-                    );
-                });
-
-                const jpegBytes = new Uint8Array(await jpegBlob.arrayBuffer());
-                const jpegImage = await newPdf.embedJpg(jpegBytes);
-
-                // Get original page dimensions to maintain layout
-                const origPage = page.getViewport({ scale: 1 });
-                const newPage = newPdf.addPage([origPage.width, origPage.height]);
-                newPage.drawImage(jpegImage, {
-                    x: 0,
-                    y: 0,
-                    width: origPage.width,
-                    height: origPage.height,
-                });
-
-                // Free canvas memory
-                canvas.width = 0;
-                canvas.height = 0;
-            }
-
-            setProgress(92);
-            setStatusText("Finalizing compressed PDF...");
-
-            const compressedBytes = await newPdf.save({
-                useObjectStreams: true,
-                addDefaultPage: false,
-            });
-
-            const compressedBlob = new Blob([new Uint8Array(compressedBytes).buffer as ArrayBuffer], { type: "application/pdf" });
-
-            setResult({
-                original: file.size,
-                compressed: compressedBlob.size,
-                blob: compressedBlob,
-            });
-
-            setProgress(100);
-            setStatusText("Done!");
-            setTimeout(() => {
-                setIsProcessing(false);
-                setProgress(0);
-                setStatusText("");
-            }, 800);
-        } catch (err) {
-            console.error("Compression failed:", err);
-            setError(err instanceof Error ? err.message : "Compression failed. The PDF may be corrupted or encrypted.");
-            setIsProcessing(false);
-            setProgress(0);
-            setStatusText("");
-        }
-    };
-
-    const handleDownload = () => {
-        if (!result || !file) return;
-        downloadFile(result.blob, file.name.replace(/\.pdf$/i, "_compressed.pdf"));
-    };
-
-    const compressionRatio = result
-        ? Math.round((1 - result.compressed / result.original) * 100)
-        : 0;
-
-    return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/pdf"><ArrowLeft className="h-4 w-4" /></Link>
+          <ToolPanel title="Result" description={!result ? "Run compression to compare file sizes here." : undefined}>
+            {result && file && (
+              <>
+                <dl className="grid grid-cols-2 gap-2 rounded-lg border bg-background p-3">
+                  <div><dt className="text-sm text-muted-foreground">Original</dt><dd className="font-semibold">{formatBytes(file.size)}</dd></div>
+                  <div><dt className="text-sm text-muted-foreground">Best result</dt><dd className="font-semibold">{formatBytes(result.blob.size)}</dd></div>
+                </dl>
+                <p role="status" className="mt-3 text-sm text-muted-foreground">
+                  {reduced ? formatBytes(file.size - result.blob.size) + " saved" : "The original is the smallest copy found."} · {result.pages} {result.pages === 1 ? "page" : "pages"}
+                </p>
+                {result.targetBytes && <p className="mt-2 text-sm font-medium">
+                  {result.blob.size <= result.targetBytes ? "Target met" : "Target not reached"} · {formatBytes(result.targetBytes)}
+                  {result.blob.size !== result.targetBytes && " · " + formatBytes(Math.abs(result.blob.size - result.targetBytes)) + (result.blob.size < result.targetBytes ? " below target" : " above target")}
+                </p>}
+                {reduced && result.mode === "scan" && <p className="mt-2 text-sm text-muted-foreground">The compressed copy contains page images.</p>}
+                <Button className="mt-4 w-full" size="lg" onClick={() => downloadFile(result.blob, reduced ? file.name.replace(/\.pdf$/i, "") + "_compressed.pdf" : file.name)}>
+                  <Download /> {reduced ? "Download compressed PDF" : "Download original PDF"}
                 </Button>
-                <h1 className="text-lg font-semibold">Compress PDF</h1>
-            </div>
-
-            {error && (
-                <div className="border rounded-xl p-4 mb-4 bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-800">
-                    <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
-                        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-                    </div>
-                </div>
+              </>
             )}
-
-            {!file ? (
-                <div
-                    className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                    onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-                    onDrop={handleDrop}
-                    onClick={() => document.getElementById("pdf-input")?.click()}
-                >
-                    <input type="file" accept="application/pdf" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} className="hidden" id="pdf-input" />
-                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm"><span className="font-medium">Drop PDF</span> <span className="text-muted-foreground">or tap</span></p>
-                </div>
-            ) : (
-                <>
-                    <div className="border rounded-xl p-4 mb-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <FileText className="h-5 w-5 text-red-500" />
-                                <div><span className="text-sm font-medium">{file.name}</span><p className="text-xs text-muted-foreground">{formatBytes(file.size)}</p></div>
-                            </div>
-                            <Button variant="ghost" size="sm" onClick={() => { setFile(null); setResult(null); setError(null); }}>Change</Button>
-                        </div>
-                    </div>
-
-                    <div className="border rounded-xl p-4 mb-4">
-                        <div className="flex justify-between items-center mb-2">
-                            <label className="text-sm font-medium">Quality</label>
-                            <span className="text-sm">{quality[0]}%</span>
-                        </div>
-                        <Slider value={quality} onValueChange={setQuality} min={10} max={100} step={10} disabled={isProcessing} />
-                        <p className="text-xs text-muted-foreground mt-2">
-                            {quality[0] <= 30 ? "Maximum compression • Reduced clarity" :
-                                quality[0] <= 60 ? "Balanced compression • Good clarity" :
-                                    "Minimal compression • Best clarity"}
-                        </p>
-                    </div>
-
-                    <div className="border rounded-xl p-4 mb-4 bg-amber-50/30 dark:bg-amber-950/10 border-amber-200/50 dark:border-amber-800/50">
-                        <p className="text-xs text-amber-700 dark:text-amber-400">
-                            ⚠️ Compression renders pages as images. Text will no longer be selectable in the output.
-                        </p>
-                    </div>
-
-                    {result && (
-                        <div className="border rounded-xl p-4 mb-4 bg-muted/30">
-                            <div className="flex items-center gap-2">
-                                <Gauge className="h-4 w-4 text-green-500" />
-                                <span className="text-sm">{formatBytes(result.original)} → {formatBytes(result.compressed)}</span>
-                                {compressionRatio > 0 ? (
-                                    <span className="text-xs text-green-600 font-medium">({compressionRatio}% saved)</span>
-                                ) : (
-                                    <span className="text-xs text-amber-600">(No size reduction)</span>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {isProcessing && (
-                        <div className="mb-4">
-                            <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                                <span>{statusText}</span>
-                                <span>{progress}%</span>
-                            </div>
-                            <Progress value={progress} className="h-1.5" />
-                        </div>
-                    )}
-
-                    {result ? (
-                        <Button onClick={handleDownload} className="w-full h-11">
-                            <Download className="h-4 w-4 mr-2" />Download Compressed PDF
-                        </Button>
-                    ) : (
-                        <Button onClick={compress} disabled={isProcessing} className="w-full h-11">
-                            {isProcessing ? statusText : <><Download className="h-4 w-4 mr-2" />Compress PDF</>}
-                        </Button>
-                    )}
-                </>
-            )}
-
-            <p className="text-xs text-muted-foreground text-center mt-6">Processed locally • Pages re-rendered at selected quality</p>
+          </ToolPanel>
         </div>
-    );
+        <ToolPanel title="Compression settings">
+          <fieldset disabled={running} className="space-y-3">
+            <legend className="mb-2 text-sm font-semibold">Compression method</legend>
+            {modes.map(option => (
+              <label key={option.id} className="flex cursor-pointer items-start gap-3 rounded-xl border p-3 has-checked:border-primary has-checked:bg-accent">
+                <input type="radio" name="compression-mode" className="mt-1 size-4 shrink-0 accent-primary" checked={mode === option.id} onChange={() => setMode(option.id)} />
+                <span>
+                  <span className="block text-sm font-semibold">{option.name}</span>
+                  <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{option.description}</span>
+                </span>
+              </label>
+            ))}
+            {mode === "scan" && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm font-medium">Quality without a target
+                  <select className="mt-2 h-9 w-full rounded-md border bg-background px-2 disabled:opacity-50" value={level} disabled={Boolean(target)} onChange={event => setLevel(Number(event.target.value))}>
+                    {scanLevels.map(option => <option key={option.index} value={option.index}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium">Target size in KB (optional)
+                  <Input className="mt-2" type="number" min="1" max="204800" value={target} onChange={event => setTarget(event.target.value)} placeholder="e.g. 500" />
+                </label>
+                <p className="text-sm text-muted-foreground sm:col-span-2">With a target set, NoHoldr automatically tests multiple quality levels and keeps the closest result it finds below the limit. Some PDFs stay smaller even at the highest quality tested.</p>
+              </div>
+            )}
+          </fieldset>
+          <p className="mt-4 text-sm text-muted-foreground">Keep the original if it contains a digital signature. Rewriting a PDF can invalidate it.</p>
+          <Button size="lg" className="mt-4 w-full" onClick={run} disabled={!file || running}><Minimize2 /> {running ? "Compressing…" : "Compress PDF"}</Button>
+          {running && <div className="mt-4">
+            <Progress value={progress} aria-label="Compression progress" />
+            <p role="status" className="mt-2 text-sm text-muted-foreground">{status}</p>
+          </div>}
+          {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+        </ToolPanel>
+      </div>
+    </ToolWorkspace>
+  );
 }

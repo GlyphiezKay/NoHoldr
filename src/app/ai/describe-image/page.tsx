@@ -111,6 +111,7 @@ export default function DescribeImagePage() {
                 </div>
             ) : (
                 <div className="relative rounded-xl border overflow-hidden mb-4">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- Local file previews stay in the browser. */}
                     <img src={imageUrl} alt="Preview" className="w-full max-h-80 object-contain bg-muted" />
                     <Button
                         variant="secondary"

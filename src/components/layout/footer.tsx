@@ -1,20 +1,27 @@
 import Link from "next/link";
+import { Wordmark } from "./wordmark";
+
+const links = [
+  { name: "About", href: "/about" },
+  { name: "Privacy", href: "/privacy" },
+  { name: "Legal", href: "/legal" },
+  { name: "FAQ", href: "/faq" },
+];
 
 export function Footer() {
-    return (
-        <footer className="border-t">
-            <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-2 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                    <span className="font-medium">NoHoldr</span>
-                    <span>•</span>
-                    <span>by Deviantkay</span>
-                </div>
-                <div className="flex items-center gap-4">
-                    <Link href="/about" className="hover:text-foreground transition-colors">About</Link>
-                    <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
-                    <Link href="/faq" className="hover:text-foreground transition-colors">FAQ</Link>
-                </div>
-            </div>
-        </footer>
-    );
+  return (
+    <footer className="border-t bg-card">
+      <div className="mx-auto flex max-w-[76rem] flex-col gap-5 px-[18px] py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Wordmark />
+          <span className="text-sm text-muted-foreground">by GlyphiezKay</span>
+        </div>
+        <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-3">
+          {links.map(({ name, href }) => (
+            <Link key={href} href={href} className="rounded text-sm text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-4">{name}</Link>
+          ))}
+        </nav>
+      </div>
+    </footer>
+  );
 }

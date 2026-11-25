@@ -2,9 +2,10 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
+import { csvToJSON, jsonToCSV } from "@/lib/csv-utils";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload, FileText, Download, Copy, Check, Info } from "lucide-react";
+import { ArrowLeft, FileText, Download, Copy, Check, Info } from "lucide-react";
 
 const OUTPUT_FORMATS = [
     { value: "txt", label: "Plain Text (.txt)", desc: "Extract text content", ext: "txt" },
@@ -17,44 +18,8 @@ const OUTPUT_FORMATS = [
 
 function formatBytes(b: number) { return b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(1) + " KB" : (b / 1048576).toFixed(1) + " MB"; }
 
-function csvToJson(csv: string): string {
-    const lines = csv.trim().split("\n");
-    if (lines.length < 2) return "[]";
-    const headers = parseCsvLine(lines[0]);
-    const result = lines.slice(1).map(line => {
-        const values = parseCsvLine(line);
-        const obj: Record<string, string> = {};
-        headers.forEach((h, i) => { obj[h.trim()] = (values[i] || "").trim(); });
-        return obj;
-    });
-    return JSON.stringify(result, null, 2);
-}
-
-function parseCsvLine(line: string): string[] {
-    const result: string[] = [];
-    let current = "";
-    let inQuotes = false;
-    for (const char of line) {
-        if (char === '"') { inQuotes = !inQuotes; }
-        else if (char === "," && !inQuotes) { result.push(current); current = ""; }
-        else { current += char; }
-    }
-    result.push(current);
-    return result;
-}
-
-function jsonToCsv(json: string): string {
-    const data = JSON.parse(json);
-    if (!Array.isArray(data) || data.length === 0) return "";
-    const headers = Object.keys(data[0]);
-    const rows = data.map((row: Record<string, unknown>) =>
-        headers.map(h => {
-            const val = String(row[h] ?? "");
-            return val.includes(",") || val.includes('"') || val.includes("\n") ? `"${val.replace(/"/g, '""')}"` : val;
-        }).join(",")
-    );
-    return [headers.join(","), ...rows].join("\n");
-}
+function csvToJson(csv: string): string { return JSON.stringify(csvToJSON(csv), null, 2); }
+function jsonToCsv(json: string): string { return jsonToCSV(JSON.parse(json)); }
 
 function jsonToXml(json: string): string {
     const data = JSON.parse(json);

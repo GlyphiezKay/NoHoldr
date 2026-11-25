@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LucideIcon } from "lucide-react";
-import { ArrowLeft, Volume2, Video, FileAudio, Scissors, Mic, Gauge, Music } from "lucide-react";
+import { ArrowLeft, Video, FileAudio, Scissors, Gauge, Music } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Tool { name: string; href: string; icon: LucideIcon; ready?: boolean; }

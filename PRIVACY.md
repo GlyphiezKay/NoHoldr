@@ -154,8 +154,8 @@ Privacy is achieved by design, not by promises.
 
 Questions about this privacy model:
 
-- **GitHub:** [Deviantkay](https://github.com/Deviantkay)
-- **Repository:** [NoHoldr](https://github.com/Deviantkay/NoHoldr)
+- **GitHub:** [GlyphiezKay](https://github.com/GlyphiezKay)
+- **Repository:** [NoHoldr](https://github.com/GlyphiezKay/NoHoldr)
 
 ---
 

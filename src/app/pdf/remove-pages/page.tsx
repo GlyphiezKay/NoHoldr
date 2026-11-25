@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, FileText, Download, Trash2 } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2 } from "lucide-react";
 import { PDFDocument } from "pdf-lib";
 import { downloadPdfBytes } from "@/lib/pdf-utils";
 

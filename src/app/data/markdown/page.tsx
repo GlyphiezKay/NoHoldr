@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check, Eye } from "lucide-react";
+import { ArrowLeft, Copy, Check } from "lucide-react";
 
 export default function MarkdownPreviewPage() {
     const [markdown, setMarkdown] = useState(`# Hello World
@@ -48,11 +48,11 @@ function greet(name) {
 
     // Simple markdown to HTML converter (no dependencies)
     const toHtml = (md: string): string => {
-        let html = md;
+        let html = escapeHtml(md);
 
         // Code blocks (fenced)
         html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang, code) =>
-            `<pre class="md-pre"><code class="md-code">${escapeHtml(code.trim())}</code></pre>`
+            `<pre class="md-pre"><code class="md-code">${code.trim()}</code></pre>`
         );
 
         // Inline code
@@ -80,7 +80,7 @@ function greet(name) {
         html = html.replace(/^---+$/gm, '<hr class="md-hr" />');
 
         // Blockquote
-        html = html.replace(/^>\s+(.+)$/gm, '<blockquote class="md-bq">$1</blockquote>');
+        html = html.replace(/^&gt;\s+(.+)$/gm, '<blockquote class="md-bq">$1</blockquote>');
 
         // Bold + Italic
         html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
@@ -88,11 +88,11 @@ function greet(name) {
         html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
         html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
 
-        // Links
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="md-link" target="_blank" rel="noopener">$1</a>');
-
-        // Images
-        html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="md-img" />');
+        // External images are displayed as links to avoid automatic network requests.
+        html = html.replace(/!?\[([^\]]+)\]\(([^)]+)\)/g, (_match, label: string, url: string) => {
+            if (!/^https?:\/\//i.test(url) || /[<>\s]/.test(url)) return label;
+            return `<a href="${url}" class="md-link" target="_blank" rel="noopener noreferrer">${label}</a>`;
+        });
 
         // Unordered lists
         html = html.replace(/^[-*]\s+(.+)$/gm, '<li class="md-li">$1</li>');
@@ -114,7 +114,7 @@ function greet(name) {
         return html;
     };
 
-    const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
     const previewStyles = `
         .md-h1 { font-size: 1.75em; font-weight: 700; margin: 0.5em 0 0.3em; border-bottom: 1px solid var(--border-color, #e5e7eb); padding-bottom: 0.2em; }

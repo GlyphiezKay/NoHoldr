@@ -56,8 +56,8 @@ function md5(str: string): string {
         return md5blks;
     }
 
-    let n = str.length;
-    let state = [1732584193, -271733879, -1732584194, 271733878];
+    const n = str.length;
+    const state = [1732584193, -271733879, -1732584194, 271733878];
     let i;
     for (i = 64; i <= n; i += 64) md5cycle(state, md5blk(str.substring(i - 64, i)));
     str = str.substring(i - 64);

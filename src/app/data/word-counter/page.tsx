@@ -5,6 +5,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Copy, Check } from "lucide-react";
 
+const StatCard = ({ label, value }: { label: string; value: string | number }) => (
+    <div className="p-3 rounded-lg bg-muted/40 text-center">
+        <p className="text-xl font-bold">{value}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+);
+
 export default function WordCounterPage() {
     const [text, setText] = useState("");
     const [copied, setCopied] = useState(false);
@@ -54,13 +61,6 @@ export default function WordCounterPage() {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
     };
-
-    const StatCard = ({ label, value }: { label: string; value: string | number }) => (
-        <div className="p-3 rounded-lg bg-muted/40 text-center">
-            <p className="text-xl font-bold">{value}</p>
-            <p className="text-xs text-muted-foreground">{label}</p>
-        </div>
-    );
 
     return (
         <div className="max-w-3xl mx-auto px-4 py-6">

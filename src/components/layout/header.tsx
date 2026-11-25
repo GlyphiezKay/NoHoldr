@@ -1,84 +1,54 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-    FileText,
-    Image,
-    Music,
-    FolderArchive,
-    Database,
-    Sparkles,
-    Menu,
-    X,
-    ArrowLeftRight
-} from "lucide-react";
+import { LockKeyhole, Menu, X } from "lucide-react";
+import { toolCategories } from "@/lib/tool-categories";
+import { Wordmark } from "./wordmark";
 
-const navItems = [
-    { name: "PDF", href: "/pdf", icon: FileText },
-    { name: "Image", href: "/image", icon: Image },
-    { name: "Media", href: "/media", icon: Music },
-    { name: "Convert", href: "/convert", icon: ArrowLeftRight },
-    { name: "Files", href: "/files", icon: FolderArchive },
-    { name: "Data", href: "/data", icon: Database },
-    { name: "AI", href: "/ai", icon: Sparkles },
-];
+const navLink = "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 aria-[current]:bg-accent aria-[current]:text-foreground";
 
 export function Header() {
-    const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const current = (href: string) => pathname === href ? "page" : pathname.startsWith(href + "/") ? "location" : undefined;
 
-    return (
-        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="max-w-6xl mx-auto px-4 flex h-12 items-center justify-between">
-                {/* Logo - centered on mobile */}
-                <Link href="/" className="font-bold text-lg tracking-tight">
-                    NoHoldr
-                </Link>
-
-                {/* Desktop Nav - centered */}
-                <nav className="hidden md:flex items-center gap-1">
-                    {navItems.map((item) => (
-                        <Link
-                            key={item.name}
-                            href={item.href}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-muted"
-                        >
-                            <item.icon className="h-3.5 w-3.5" />
-                            <span>{item.name}</span>
-                        </Link>
-                    ))}
-                </nav>
-
-                {/* Mobile toggle */}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="md:hidden h-9 w-9"
-                    onClick={() => setOpen(!open)}
-                >
-                    {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                </Button>
-            </div>
-
-            {/* Mobile Nav - full width grid */}
-            {open && (
-                <div className="md:hidden border-t bg-background">
-                    <nav className="max-w-6xl mx-auto px-4 py-3 grid grid-cols-3 gap-2">
-                        {navItems.map((item) => (
-                            <Link
-                                key={item.name}
-                                href={item.href}
-                                className="flex flex-col items-center gap-1 p-3 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted active:bg-muted"
-                                onClick={() => setOpen(false)}
-                            >
-                                <item.icon className="h-5 w-5" />
-                                <span className="text-xs font-medium">{item.name}</span>
-                            </Link>
-                        ))}
-                    </nav>
-                </div>
-            )}
-        </header>
-    );
+  return (
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-[76rem] items-center justify-between gap-4 px-[18px] sm:px-6">
+        <Wordmark />
+        <nav aria-label="Main navigation" className="hidden items-center gap-0.5 md:flex">
+          {toolCategories.map(({ name, href }) => (
+            <Link key={href} href={href} aria-current={current(href)} className={navLink}>{name}</Link>
+          ))}
+        </nav>
+        <Link href="/privacy" aria-current={current("/privacy")} className={`hidden md:flex ${navLink}`}>
+          <LockKeyhole className="size-4" aria-hidden="true" /> Privacy
+        </Link>
+        <button
+          type="button"
+          aria-label={open ? "Close navigation" : "Open navigation"}
+          aria-expanded={open}
+          aria-controls="mobile-navigation"
+          className="grid size-11 place-items-center rounded-lg hover:bg-accent focus-visible:outline-2 md:hidden"
+          onClick={() => setOpen(!open)}
+        >
+          {open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+        </button>
+      </div>
+      <div id="mobile-navigation" hidden={!open} className="border-t md:hidden">
+        <nav aria-label="Mobile navigation" className="mx-auto grid max-w-md grid-cols-2 gap-1 px-[18px] py-3">
+          {toolCategories.map(({ name, href, icon: Icon }) => (
+            <Link key={href} href={href} aria-current={current(href)} className={navLink} onClick={() => setOpen(false)}>
+              <Icon className="size-4" aria-hidden="true" /> {name}
+            </Link>
+          ))}
+          <Link href="/privacy" aria-current={current("/privacy")} className={navLink} onClick={() => setOpen(false)}>
+            <LockKeyhole className="size-4" aria-hidden="true" /> Privacy
+          </Link>
+        </nav>
+      </div>
+    </header>
+  );
 }

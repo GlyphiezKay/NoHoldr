@@ -19,6 +19,13 @@
 
 # production
 /build
+/public/pdf-engine/
+/public/image-codec/
+
+# Local downloads of browser engine assets
+/eng.traineddata.gz
+/ind.traineddata.gz
+/soffice.zip
 
 # misc
 .DS_Store

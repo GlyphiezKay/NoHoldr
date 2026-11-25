@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, Download, Video, Music } from "lucide-react";
+import { ArrowLeft, Download, Video, Music } from "lucide-react";
 
 export default function ExtractAudioPage() {
     const [file, setFile] = useState<File | null>(null);

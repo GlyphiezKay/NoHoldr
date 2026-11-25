@@ -1,48 +1,63 @@
 import Link from "next/link";
-import {
-  FileText,
-  Image,
-  Music,
-  FolderArchive,
-  Database,
-  Sparkles,
-  ArrowLeftRight,
-} from "lucide-react";
+import { ArrowLeftRight, FileText, Image as ImageIcon, LockKeyhole, QrCode } from "lucide-react";
+import { toolCategories } from "@/lib/tool-categories";
+import styles from "./home.module.css";
 
-const tools = [
-  { name: "PDF", href: "/pdf", icon: FileText, desc: "Merge, split, compress", count: "15" },
-  { name: "Image", href: "/image", icon: Image, desc: "Crop, resize, convert", count: "8" },
-  { name: "Media", href: "/media", icon: Music, desc: "Audio & video", count: "6" },
-  { name: "Convert", href: "/convert", icon: ArrowLeftRight, desc: "Smart format converter", count: "New" },
-  { name: "Files", href: "/files", icon: FolderArchive, desc: "ZIP, rename, dedupe", count: "5" },
-  { name: "Data", href: "/data", icon: Database, desc: "CSV, JSON, QR, colors", count: "16" },
-  { name: "AI", href: "/ai", icon: Sparkles, desc: "Your API key", count: "4" },
+const shortcuts = [
+  { name: "Merge PDF", href: "/pdf/merge", icon: FileText },
+  { name: "Resize image", href: "/image/resize", icon: ImageIcon },
+  { name: "Create a QR code", href: "/data/qr-code", icon: QrCode },
 ];
 
 export default function Home() {
   return (
-    <main className="min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center px-4 py-8">
-      <div className="w-full max-w-4xl mx-auto text-center">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">NoHoldr</h1>
-        <p className="text-sm text-muted-foreground mb-8">Fast file tools • Local only • No uploads</p>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
-          {tools.map((tool) => (
-            <Link
-              key={tool.name}
-              href={tool.href}
-              className="group relative flex flex-col items-center justify-center p-4 sm:p-6 rounded-xl border bg-card transition-all duration-150 hover:border-foreground/30 hover:shadow-sm active:scale-[0.98]"
-            >
-              <tool.icon className="h-6 w-6 sm:h-7 sm:w-7 mb-2 text-muted-foreground group-hover:text-foreground transition-colors" />
-              <span className="font-medium text-sm sm:text-base">{tool.name}</span>
-              <span className="text-xs text-muted-foreground mt-0.5">{tool.desc}</span>
-              <span className="absolute top-2 right-2 text-[10px] text-muted-foreground/60">{tool.count}</span>
+    <main className={styles.home} id="main-content">
+      <section className={styles.hero} aria-labelledby="hero-title">
+        <div className={styles.intro}>
+          <h1 id="hero-title">Your files.<br /><span>Your browser.</span></h1>
+          <p>Convert, edit, and organize files with tools that run right in your browser.</p>
+          <div className={styles.actions}>
+            <Link href="/convert" className={styles.primary}>
+              <ArrowLeftRight size={19} aria-hidden="true" />
+              Convert a file
             </Link>
-          ))}
+            <a href="#tools" className={styles.secondary}>Browse tools</a>
+          </div>
         </div>
 
-        <p className="text-xs text-muted-foreground">Files processed in browser memory • Never uploaded • Never stored</p>
-      </div>
+        <nav className={styles.shortcuts} aria-label="Quick tools">
+          <h2>Quick tools</h2>
+          {shortcuts.map(({ href, icon: Icon, name }) => (
+            <Link href={href} key={href}><Icon size={20} aria-hidden="true" />{name}</Link>
+          ))}
+        </nav>
+      </section>
+
+      <section id="tools" className={styles.catalog} aria-labelledby="tools-title">
+        <h2 id="tools-title">Explore the tools</h2>
+        <ul className={styles.grid}>
+          {toolCategories.map(({ name, href, icon: Icon, description, tone }) => (
+            <li key={href}>
+              <Link href={href} className={styles.card} data-tone={tone}>
+                <span className={styles.icon}><Icon size={22} aria-hidden="true" /></span>
+                <div>
+                  <h3>{name}</h3>
+                  <p>{description}</p>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <aside className={styles.privacy}>
+        <span className={styles.privacyIcon}><LockKeyhole size={24} aria-hidden="true" /></span>
+        <div>
+          <h2>File processing stays on your device.</h2>
+          <p>Optional AI tools send the content you choose directly to Google Gemini.</p>
+        </div>
+        <Link href="/privacy">Privacy policy</Link>
+      </aside>
     </main>
   );
 }

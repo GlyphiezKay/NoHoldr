@@ -1,0 +1,7 @@
+allowBuilds:
+  sharp: true
+  unrs-resolver: true
+  tesseract.js: false
+overrides:
+  "pptxgenjs>image-size": "2.1.0"
+  "mammoth>@xmldom/xmldom": "0.8.15"

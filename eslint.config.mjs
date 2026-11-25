@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Bundled verbatim from pdfjs-dist by scripts/sync-pdf-worker.mjs.
+    "public/pdf.worker.min.mjs",
+    "public/pdf-engine/**",
+    "public/image-codec/**",
   ]),
 ]);
 

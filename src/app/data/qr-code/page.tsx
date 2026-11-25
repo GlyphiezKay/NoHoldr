@@ -57,7 +57,8 @@ function drawBody(ctx: CanvasRenderingContext2D, x: number, y: number, s: number
                 const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
                 const px = cx + r * Math.cos(angle);
                 const py = cy + r * Math.sin(angle);
-                i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
             }
             ctx.closePath();
             ctx.fill();
@@ -77,7 +78,6 @@ function drawBody(ctx: CanvasRenderingContext2D, x: number, y: number, s: number
 
 function drawEyeFrame(ctx: CanvasRenderingContext2D, x: number, y: number, cellSize: number, shape: EyeFrameShape, color: string) {
     const s = cellSize * 7;
-    const inner = cellSize;
     ctx.strokeStyle = color;
     ctx.lineWidth = cellSize;
     const offset = cellSize / 2;
@@ -144,6 +144,65 @@ function drawEyeBall(ctx: CanvasRenderingContext2D, x: number, y: number, cellSi
 }
 
 /* ==================== COMPONENT ==================== */
+/* === SHAPE SELECTOR COMPONENT === */
+const ShapeGrid = <T extends string>({ options, value, onChange, renderPreview }: {
+    options: T[]; value: T; onChange: (v: T) => void;
+    renderPreview: (shape: T, active: boolean) => React.ReactNode;
+}) => (
+    <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => (
+            <button key={opt} onClick={() => onChange(opt)}
+                className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center transition-all ${value === opt ? "border-primary bg-primary/10 scale-105" : "border-muted hover:border-muted-foreground/30"}`}>
+                {renderPreview(opt, value === opt)}
+            </button>
+        ))}
+    </div>
+);
+
+/* === Mini shape preview renderers === */
+const BodyPreview = ({ shape }: { shape: BodyShape }) => {
+    switch (shape) {
+        case "square": return <div className="w-5 h-5 grid grid-cols-3 gap-[1px]">{[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className={`${[0, 1, 2, 4, 6, 7, 8].includes(i) ? "bg-foreground" : ""} rounded-[0.5px]`} />)}</div>;
+        case "dots": return <div className="w-5 h-5 grid grid-cols-3 gap-[1px]">{[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className={`${[0, 1, 2, 4, 6, 7, 8].includes(i) ? "bg-foreground rounded-full" : ""}`} />)}</div>;
+        case "rounded": return <div className="w-5 h-5 grid grid-cols-3 gap-[1px]">{[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className={`${[0, 1, 2, 4, 6, 7, 8].includes(i) ? "bg-foreground rounded-[2px]" : ""}`} />)}</div>;
+        case "diamond": return <div className="w-4 h-4 bg-foreground rotate-45" />;
+        case "star": return <span className="text-[10px]">★</span>;
+        case "heart": return <span className="text-[10px]">♥</span>;
+    }
+};
+
+const EyeFramePreview = ({ shape }: { shape: EyeFrameShape }) => {
+    switch (shape) {
+        case "square": return <div className="w-5 h-5 border-2 border-foreground" />;
+        case "rounded": return <div className="w-5 h-5 border-2 border-foreground rounded-md" />;
+        case "circle": return <div className="w-5 h-5 border-2 border-foreground rounded-full" />;
+        case "dots": return <div className="w-5 h-5 border-2 border-dotted border-foreground rounded-sm" />;
+    }
+};
+
+const EyeBallPreview = ({ shape }: { shape: EyeBallShape }) => {
+    switch (shape) {
+        case "square": return <div className="w-3 h-3 bg-foreground" />;
+        case "rounded": return <div className="w-3 h-3 bg-foreground rounded-sm" />;
+        case "circle": return <div className="w-3 h-3 bg-foreground rounded-full" />;
+        case "diamond": return <div className="w-2.5 h-2.5 bg-foreground rotate-45" />;
+    }
+};
+
+const Section = ({ open, onToggle, title, icon, children }: { open: boolean; onToggle: () => void; title: string; icon: string; children: React.ReactNode }) => (
+    <div className="border rounded-xl overflow-hidden mb-3">
+        <button onClick={onToggle} aria-expanded={open}
+            className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
+            <div className="flex items-center gap-3">
+                <span className="text-base">{icon}</span>
+                <span className="text-sm font-medium">{title}</span>
+            </div>
+            <span className={`text-muted-foreground text-xs transition-transform ${open ? "rotate-180" : ""}`}>▼</span>
+        </button>
+        {open && <div className="px-4 pb-4 border-t pt-4">{children}</div>}
+    </div>
+);
+
 export default function QRCodePage() {
     const [type, setType] = useState<QRType>("url");
     const [input, setInput] = useState("");
@@ -169,6 +228,13 @@ export default function QRCodePage() {
     const [generated, setGenerated] = useState(false);
     const [copied, setCopied] = useState(false);
     const [activeSection, setActiveSection] = useState<string | null>("content");
+
+    const toggleSection = (id: string) => setActiveSection(current => current === id ? null : id);
+
+    const updateInput = (value: string) => {
+        setInput(value);
+        if (!value.trim()) setGenerated(false);
+    };
 
     const buildPayload = useCallback(() => {
         switch (type) {
@@ -321,11 +387,10 @@ export default function QRCodePage() {
     }, [buildPayload, resolution, fgColor, bgColor, transparent, ecLevel, bodyShape, eyeFrameShape, eyeBallShape, logoDataUrl, logoSize, logoShape]);
 
     useEffect(() => {
-        if (input.trim()) {
-            const timer = setTimeout(generateQR, 200);
-            return () => clearTimeout(timer);
-        } else { setGenerated(false); }
-    }, [input, type, wifiPassword, wifiSecurity, resolution, fgColor, bgColor, transparent, ecLevel, bodyShape, eyeFrameShape, eyeBallShape, logoDataUrl, logoSize, logoShape, generateQR]);
+        if (!input.trim()) return;
+        const timer = setTimeout(generateQR, 200);
+        return () => clearTimeout(timer);
+    }, [input, generateQR]);
 
     // Logo upload
     const handleLogoUpload = (f: File) => {
@@ -378,66 +443,6 @@ export default function QRCodePage() {
         } catch { /* */ }
     };
 
-    /* === SHAPE SELECTOR COMPONENT === */
-    const ShapeGrid = <T extends string>({ options, value, onChange, renderPreview }: {
-        options: T[]; value: T; onChange: (v: T) => void;
-        renderPreview: (shape: T, active: boolean) => React.ReactNode;
-    }) => (
-        <div className="flex flex-wrap gap-1.5">
-            {options.map((opt) => (
-                <button key={opt} onClick={() => onChange(opt)}
-                    className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center transition-all ${value === opt ? "border-primary bg-primary/10 scale-105" : "border-muted hover:border-muted-foreground/30"}`}>
-                    {renderPreview(opt, value === opt)}
-                </button>
-            ))}
-        </div>
-    );
-
-    /* === Mini shape preview renderers === */
-    const BodyPreview = ({ shape }: { shape: BodyShape }) => {
-        const s = 5;
-        switch (shape) {
-            case "square": return <div className="w-5 h-5 grid grid-cols-3 gap-[1px]">{[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className={`${[0, 1, 2, 4, 6, 7, 8].includes(i) ? "bg-foreground" : ""} rounded-[0.5px]`} />)}</div>;
-            case "dots": return <div className="w-5 h-5 grid grid-cols-3 gap-[1px]">{[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className={`${[0, 1, 2, 4, 6, 7, 8].includes(i) ? "bg-foreground rounded-full" : ""}`} />)}</div>;
-            case "rounded": return <div className="w-5 h-5 grid grid-cols-3 gap-[1px]">{[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className={`${[0, 1, 2, 4, 6, 7, 8].includes(i) ? "bg-foreground rounded-[2px]" : ""}`} />)}</div>;
-            case "diamond": return <div className="w-4 h-4 bg-foreground rotate-45" />;
-            case "star": return <span className="text-[10px]">★</span>;
-            case "heart": return <span className="text-[10px]">♥</span>;
-        }
-    };
-
-    const EyeFramePreview = ({ shape }: { shape: EyeFrameShape }) => {
-        switch (shape) {
-            case "square": return <div className="w-5 h-5 border-2 border-foreground" />;
-            case "rounded": return <div className="w-5 h-5 border-2 border-foreground rounded-md" />;
-            case "circle": return <div className="w-5 h-5 border-2 border-foreground rounded-full" />;
-            case "dots": return <div className="w-5 h-5 border-2 border-dotted border-foreground rounded-sm" />;
-        }
-    };
-
-    const EyeBallPreview = ({ shape }: { shape: EyeBallShape }) => {
-        switch (shape) {
-            case "square": return <div className="w-3 h-3 bg-foreground" />;
-            case "rounded": return <div className="w-3 h-3 bg-foreground rounded-sm" />;
-            case "circle": return <div className="w-3 h-3 bg-foreground rounded-full" />;
-            case "diamond": return <div className="w-2.5 h-2.5 bg-foreground rotate-45" />;
-        }
-    };
-
-    const Section = ({ id, title, icon, children }: { id: string; title: string; icon: string; children: React.ReactNode }) => (
-        <div className="border rounded-xl overflow-hidden mb-3">
-            <button onClick={() => setActiveSection(activeSection === id ? null : id)}
-                className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
-                <div className="flex items-center gap-3">
-                    <span className="text-base">{icon}</span>
-                    <span className="text-sm font-medium">{title}</span>
-                </div>
-                <span className={`text-muted-foreground text-xs transition-transform ${activeSection === id ? "rotate-180" : ""}`}>▼</span>
-            </button>
-            {activeSection === id && <div className="px-4 pb-4 border-t pt-4">{children}</div>}
-        </div>
-    );
-
     return (
         <div className="max-w-4xl mx-auto px-4 py-6">
             <div className="flex items-center gap-3 mb-6">
@@ -451,16 +456,16 @@ export default function QRCodePage() {
                 {/* LEFT: Controls */}
                 <div>
                     {/* Content */}
-                    <Section id="content" title="Enter Content" icon="⚡">
+                    <Section open={activeSection === "content"} onToggle={() => toggleSection("content")} title="Enter Content" icon="⚡">
                         <div className="flex gap-1 p-1 bg-muted rounded-lg mb-3 flex-wrap">
                             {presets.map((p) => (
-                                <button key={p.type} onClick={() => { setType(p.type); setInput(""); }}
+                                <button key={p.type} onClick={() => { setType(p.type); updateInput(""); }}
                                     className={`flex-1 py-1.5 px-2 text-xs rounded-md transition-colors flex items-center justify-center gap-1 min-w-[50px] ${type === p.type ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}>
                                     <p.icon className="h-3 w-3" />{p.label}
                                 </button>
                             ))}
                         </div>
-                        <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder={presets.find((p) => p.type === type)?.placeholder} />
+                        <Input value={input} onChange={(e) => updateInput(e.target.value)} placeholder={presets.find((p) => p.type === type)?.placeholder} />
                         {type === "wifi" && (
                             <div className="grid grid-cols-2 gap-2 mt-2">
                                 <div>
@@ -479,7 +484,7 @@ export default function QRCodePage() {
                     </Section>
 
                     {/* Colors */}
-                    <Section id="colors" title="Set Colors" icon="🎨">
+                    <Section open={activeSection === "colors"} onToggle={() => toggleSection("colors")} title="Set Colors" icon="🎨">
                         <div className="grid grid-cols-2 gap-3 mb-3">
                             <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">Foreground</label>
@@ -503,7 +508,7 @@ export default function QRCodePage() {
                     </Section>
 
                     {/* Logo */}
-                    <Section id="logo" title="Add Logo Image" icon="🖼️">
+                    <Section open={activeSection === "logo"} onToggle={() => toggleSection("logo")} title="Add Logo Image" icon="🖼️">
                         {!logoFile ? (
                             <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary/40 transition-colors"
                                 onClick={() => document.getElementById("logo-input")?.click()}>
@@ -513,7 +518,10 @@ export default function QRCodePage() {
                         ) : (
                             <div className="space-y-3">
                                 <div className="flex items-center gap-3">
-                                    {logoDataUrl && <img src={logoDataUrl} alt="Logo" className="h-10 w-10 object-cover rounded border" />}
+                                    {logoDataUrl && (
+                                        // eslint-disable-next-line @next/next/no-img-element -- Local file previews stay in the browser.
+                                        <img src={logoDataUrl} alt="Logo" className="h-10 w-10 object-cover rounded border" />
+                                    )}
                                     <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{logoFile.name}</p></div>
                                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setLogoFile(null); setLogoDataUrl(null); }}><X className="h-3.5 w-3.5" /></Button>
                                 </div>
@@ -535,7 +543,7 @@ export default function QRCodePage() {
                     </Section>
 
                     {/* Design */}
-                    <Section id="design" title="Customize Design" icon="🎯">
+                    <Section open={activeSection === "design"} onToggle={() => toggleSection("design")} title="Customize Design" icon="🎯">
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs text-muted-foreground mb-2 block font-medium">Body Shape</label>
@@ -565,7 +573,7 @@ export default function QRCodePage() {
                     </Section>
 
                     {/* Quality */}
-                    <Section id="quality" title="Quality & Size" icon="📐">
+                    <Section open={activeSection === "quality"} onToggle={() => toggleSection("quality")} title="Quality & Size" icon="📐">
                         <div className="space-y-3">
                             <div>
                                 <div className="flex justify-between text-xs text-muted-foreground mb-1">
@@ -594,7 +602,7 @@ export default function QRCodePage() {
                 {/* RIGHT: Preview + Download */}
                 <div className="lg:sticky lg:top-6 lg:self-start">
                     <div className={`border rounded-xl p-6 mb-4 flex flex-col items-center ${transparent ? "bg-[repeating-conic-gradient(#e5e7eb_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]" : ""}`}>
-                        <canvas ref={canvasRef} className="rounded-lg max-w-full" style={{ width: 280, height: 280, imageRendering: resolution > 512 ? "auto" : "pixelated" }} />
+                        <canvas hidden={!generated} ref={canvasRef} className="rounded-lg max-w-full" style={{ width: 280, height: 280, imageRendering: resolution > 512 ? "auto" : "pixelated" }} />
                         {!generated && <p className="text-sm text-muted-foreground mt-3">Enter content to generate</p>}
                     </div>
 

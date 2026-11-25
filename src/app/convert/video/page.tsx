@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
+import { recordVideo, extractVideoFrame } from "@/lib/video-utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload, Video as VideoIcon, Download, Info } from "lucide-react";
+import { ArrowLeft, Video as VideoIcon, Download } from "lucide-react";
 
 const OUTPUT_FORMATS = [
     { value: "webm-vp9", label: "WebM (VP9)", desc: "Modern, efficient", mime: "video/webm;codecs=vp9", ext: "webm" },
     { value: "webm-vp8", label: "WebM (VP8)", desc: "Wide support", mime: "video/webm;codecs=vp8", ext: "webm" },
-    { value: "gif", label: "GIF", desc: "Animated, universal", mime: "image/gif", ext: "gif" },
     { value: "frame-jpg", label: "Frame → JPEG", desc: "Extract single frame", mime: "image/jpeg", ext: "jpg" },
     { value: "frame-png", label: "Frame → PNG", desc: "Extract frame (lossless)", mime: "image/png", ext: "png" },
 ];
@@ -54,82 +54,9 @@ export default function VideoConverterPage() {
         if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
     }, [handleFile]);
 
-    const extractFrame = async (): Promise<Blob> => {
-        return new Promise((resolve, reject) => {
-            const vid = document.createElement("video");
-            vid.muted = true;
-            vid.onloadeddata = () => {
-                vid.currentTime = frameTime;
-                vid.onseeked = () => {
-                    const c = document.createElement("canvas");
-                    c.width = vid.videoWidth; c.height = vid.videoHeight;
-                    const ctx = c.getContext("2d")!;
-                    ctx.drawImage(vid, 0, 0);
-                    const mime = targetFormat === "frame-png" ? "image/png" : "image/jpeg";
-                    c.toBlob(b => b ? resolve(b) : reject(new Error("Failed")), mime, 0.92);
-                };
-            };
-            vid.onerror = () => reject(new Error("Failed to load video"));
-            vid.src = URL.createObjectURL(file!);
-        });
-    };
+    const extractFrame = (): Promise<Blob> => extractVideoFrame(file!, frameTime, targetFormat === "frame-png" ? "image/png" : "image/jpeg");
 
-    const convertToGif = async (): Promise<Blob> => {
-        // Capture frames using canvas → combine as animated WebP since true GIF encoding
-        // is complex in browser. We'll output as WebM and note GIF limitation.
-        // For true GIF, we'd need a library like gif.js — instead provide WebM
-        // but label it honestly.
-        return convertToWebm("video/webm;codecs=vp8");
-    };
-
-    const convertToWebm = async (mimeType?: string): Promise<Blob> => {
-        return new Promise((resolve, reject) => {
-            const vid = document.createElement("video");
-            vid.muted = true;
-            vid.src = URL.createObjectURL(file!);
-
-            vid.onloadedmetadata = () => {
-                const c = document.createElement("canvas");
-                let w = vid.videoWidth, h = vid.videoHeight;
-                if (resolution !== "original") {
-                    const target = parseInt(resolution);
-                    if (h > target) { w = Math.round(w * target / h); h = target; }
-                }
-                // Even dimensions for codec
-                c.width = w % 2 === 0 ? w : w + 1;
-                c.height = h % 2 === 0 ? h : h + 1;
-                const ctx = c.getContext("2d")!;
-
-                const stream = c.captureStream(fps);
-                // Add audio track if available
-                if ((vid as unknown as Record<string, unknown>).captureStream) {
-                    try {
-                        const vidStream = (vid as unknown as { captureStream(): MediaStream }).captureStream();
-                        vidStream.getAudioTracks().forEach(t => stream.addTrack(t));
-                    } catch { /* no audio track */ }
-                }
-
-                const mime = mimeType || (targetFormat === "webm-vp8" ? "video/webm;codecs=vp8" : "video/webm;codecs=vp9");
-                const mr = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
-                const chunks: Blob[] = [];
-                mr.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-                mr.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }));
-
-                mr.start();
-                vid.play();
-
-                const draw = () => {
-                    if (vid.ended || vid.paused) { mr.stop(); return; }
-                    ctx.drawImage(vid, 0, 0, c.width, c.height);
-                    setProgress(20 + Math.round((vid.currentTime / vid.duration) * 70));
-                    requestAnimationFrame(draw);
-                };
-                vid.onended = () => mr.stop();
-                draw();
-            };
-            vid.onerror = () => reject(new Error("Failed to load video"));
-        });
-    };
+    const convertToWebm = (): Promise<Blob> => recordVideo(file!, { mimeType: targetFormat === "webm-vp8" ? "video/webm;codecs=vp8,opus" : "video/webm;codecs=vp9,opus", fps, bitrate, maxHeight: resolution === "original" ? undefined : Number(resolution), onProgress: p => setProgress(10 + p * 0.9) });
 
     const convertVideo = async () => {
         if (!file) return;
@@ -139,8 +66,7 @@ export default function VideoConverterPage() {
             let blob: Blob;
             if (targetFormat.startsWith("frame-")) {
                 blob = await extractFrame();
-            } else if (targetFormat === "gif") {
-                blob = await convertToGif();
+
             } else {
                 blob = await convertToWebm();
             }
@@ -209,7 +135,7 @@ export default function VideoConverterPage() {
                     <div className="border rounded-xl p-4 mb-4 space-y-3">
                         <div>
                             <label className="text-xs text-muted-foreground mb-1 block">Output</label>
-                            <Select value={targetFormat} onValueChange={setTargetFormat}>
+                            <Select value={targetFormat} onValueChange={value => { if (convertedUrl) URL.revokeObjectURL(convertedUrl); setConvertedUrl(null); setTargetFormat(value); }} disabled={isProcessing}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {OUTPUT_FORMATS.map(f => (
@@ -280,12 +206,7 @@ export default function VideoConverterPage() {
                         )}
                     </div>
 
-                    {targetFormat === "gif" && (
-                        <div className="flex items-start gap-2 mt-3 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
-                            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                            <span>True GIF encoding requires a dedicated library. Output will be WebM format which works similarly in browsers.</span>
-                        </div>
-                    )}
+
                 </>
             )}
 

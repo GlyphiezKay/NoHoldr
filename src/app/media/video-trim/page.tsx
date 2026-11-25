@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { recordVideo } from "@/lib/video-utils";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, Download, Video, Play, Pause, AlertTriangle, Info } from "lucide-react";
+import { ArrowLeft, Download, Video, Play, Pause, AlertTriangle, Info } from "lucide-react";
 import { downloadFile } from "@/lib/download-manager";
 
 export default function VideoTrimPage() {
@@ -82,63 +83,7 @@ export default function VideoTrimPage() {
         setStatusText(`Trimming ${formatTime(trimDuration)} of video...`);
 
         try {
-            const video = document.createElement("video");
-            const videoSrcUrl = URL.createObjectURL(file);
-            video.src = videoSrcUrl;
-            video.currentTime = startTime;
-
-            await new Promise<void>((resolve, reject) => {
-                video.onloadedmetadata = () => {
-                    video.currentTime = startTime;
-                };
-                video.onseeked = () => resolve();
-                video.onerror = () => reject(new Error("Failed to load video"));
-            });
-
-            const canvas = document.createElement("canvas");
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext("2d")!;
-
-            const stream = canvas.captureStream(30);
-            const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
-            const chunks: Blob[] = [];
-
-            recorder.ondataavailable = (e) => chunks.push(e.data);
-
-            const resultPromise = new Promise<Blob>((resolve) => {
-                recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: "video/webm" });
-                    resolve(blob);
-                };
-            });
-
-            recorder.start();
-            video.muted = true;
-            video.play();
-
-            const startRecordTime = Date.now();
-
-            const drawFrame = () => {
-                const elapsed = (Date.now() - startRecordTime) / 1000;
-                if (abortRef.current) {
-                    video.pause();
-                    recorder.stop();
-                    return;
-                }
-                if (elapsed >= trimDuration || video.ended || video.paused) {
-                    video.pause();
-                    recorder.stop();
-                    return;
-                }
-                ctx.drawImage(video, 0, 0);
-                setProgress(Math.round((elapsed / trimDuration) * 100));
-                requestAnimationFrame(drawFrame);
-            };
-            drawFrame();
-
-            const blob = await resultPromise;
-            URL.revokeObjectURL(videoSrcUrl);
+            const blob = await recordVideo(file, { start: startTime, end: endTime, cancelled: () => abortRef.current, onProgress: setProgress });
 
             if (abortRef.current) {
                 setIsProcessing(false);

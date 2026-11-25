@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { ArrowLeft, Upload, Download, Music, Play, Pause } from "lucide-react";
+import { ArrowLeft, Download, Music, Play, Pause } from "lucide-react";
 
 export default function AudioTrimPage() {
     const [file, setFile] = useState<File | null>(null);

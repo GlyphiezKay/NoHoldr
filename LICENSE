@@ -1,135 +1,21 @@
-# NoHoldr Attribution License (NAL) v2.0
+MIT License
 
-**Copyright © 2025–Present Deviantkay**  
-Official Repository: https://github.com/Deviantkay/NoHoldr
+Copyright (c) 2025-2026 Deviantkay
 
-> *Based on the MIT License, with additional attribution requirements for derivative works.*
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
----
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-## 1. Definitions
-
-| Term | Definition |
-|------|------------|
-| **Software** | The NoHoldr project and all associated documentation files |
-| **NoHoldr** | The original software project by Deviantkay, built on the principle: *"No holding files. No hidden processing. No retention."* |
-| **Core Components** | Foundational architectural elements enabling NoHoldr's privacy-focused, retention-free operation (client-side processing, serverless execution) |
-| **Functional Modules** | Distinct units of functionality: PDF Processing Engine, Image Processing Tools, Document Conversion Services, Media Processing Utilities, File Analysis Components |
-| **Original Module** | Any Functional Module from the official repository, unmodified |
-| **Modified Module** | Any Functional Module derived from an Original Module with alterations |
-| **New Module** | Any Functional Module created independently, not present in the original repository |
-| **Derivative Work** | Any work based on the Software (forks, modifications, adaptations, translations) |
-
----
-
-## 2. Grant of License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions.
-
----
-
-## 3. Attribution Requirements
-
-### 3.1 General Attribution
-
-The copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-### 3.2 Derivative Work Attribution
-
-Any Derivative Work must include clear attribution in at least one of:
-
-- README or primary documentation
-- Credits, Acknowledgments, or About section  
-- LICENSE or NOTICE file
-- Visible UI element (for graphical applications)
-
-### 3.3 Attribution Format
-
-| Module Type | Required Attribution Format |
-|-------------|----------------------------|
-| **Original** | `[Module Name] — Original component from NoHoldr by Deviantkay` |
-| **Modified** | `[Module Name] — Based on [Original Name] from NoHoldr by Deviantkay, modified by [Author]` |
-| **New** *(recommended)* | `[Module Name] — New component by [Author]` |
-
-**Examples:**
-```
-PDF Processing Engine — Original component from NoHoldr by Deviantkay
-Advanced PDF Tools — Based on PDF Processing Engine from NoHoldr by Deviantkay, modified by Example Corp
-Document Converter — New component by Example Corp
-```
-
----
-
-## 4. Ownership & Claims
-
-### 4.1 No Retroactive Claims
-
-- Third-party additions shall not be claimed as part of the original NoHoldr project
-- Deviantkay disclaims ownership of features not in the official repository
-- Derivative Works may not use "NoHoldr" alone as a project name
-  - ✓ Acceptable: `NoHoldr-Extended`, `[Project] powered by NoHoldr`
-  - ✗ Not allowed: `NoHoldr`, `NoHoldr 2`
-
-### 4.2 Ownership Boundaries
-
-- Deviantkay retains all rights to the NoHoldr name, branding, and original codebase
-- Derivative Work authors retain ownership of their original contributions under this license
-
----
-
-## 5. Disclaimer of Warranty & Liability
-
-### 5.1 As-Is Disclaimer
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
-
-### 5.2 Limitation of Liability
-
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-### 5.3 Derivative Work Responsibility
-
-All legal responsibility for Derivative Works lies solely with their authors/distributors, including:
-
-- Compliance with applicable laws and regulations
-- Intellectual property and data protection compliance
-- Third-party claims and disputes
-- Security vulnerabilities introduced by modifications
-- Data handling practices
-
-> ⚠️ Use of Derivative Works does not imply endorsement, support, or quality assurance by the original NoHoldr project.
-
-### 5.4 Indemnification
-
-Distributors of Derivative Works agree to indemnify, defend, and hold harmless Deviantkay and contributors from any claims, damages, losses, or expenses (including attorneys' fees) arising from such Derivative Work.
-
----
-
-## 6. Third-Party Components
-
-Third-party open-source components are subject to their own license terms as listed in the accompanying **NOTICE** file. The attribution requirements in Section 3 do not apply to third-party components.
-
----
-
-## 7. General Provisions
-
-### 7.1 Severability
-
-If any provision is held unenforceable, it shall be enforced to the maximum extent possible. Remaining provisions remain in full effect.
-
-### 7.2 Entire Agreement
-
-This license constitutes the entire agreement regarding the Software and supersedes all prior understandings.
-
----
-
-## License Metadata
-
-| Field | Value |
-|-------|-------|
-| **License Name** | NoHoldr Attribution License (NAL) |
-| **Version** | 2.0 |
-| **SPDX Identifier** | NAL-2.0 (Custom) |
-| **Effective Date** | January 2025 |
-| **Base License** | MIT License + Attribution Requirements |
-| **Official Source** | https://github.com/Deviantkay/NoHoldr |
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

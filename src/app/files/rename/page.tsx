@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Upload, Download, File, Copy, Check } from "lucide-react";
+import { ArrowLeft, Upload, Download, File} from "lucide-react";
 
 interface FileItem {
     id: string;
@@ -21,16 +21,6 @@ export default function BatchRenamePage() {
     const [replaceWith, setReplaceWith] = useState("");
     const [isDragging, setIsDragging] = useState(false);
 
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        addFiles(Array.from(e.dataTransfer.files));
-    }, []);
-
-    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) addFiles(Array.from(e.target.files));
-    }, []);
-
     const addFiles = (newFiles: File[]) => {
         setFiles(prev => [...prev, ...newFiles.map(f => ({
             id: crypto.randomUUID(),
@@ -38,6 +28,16 @@ export default function BatchRenamePage() {
             originalName: f.name,
             newName: f.name,
         }))]);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        addFiles(Array.from(e.dataTransfer.files));
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) addFiles(Array.from(e.target.files));
     };
 
     const applyRename = () => {

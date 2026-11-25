@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LucideIcon } from "lucide-react";
-import { ArrowLeft, FolderArchive, FileText, Copy, Trash2, Hash, FolderSync } from "lucide-react";
+import { ArrowLeft, FolderArchive, FileText, Copy, Hash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Tool { name: string; href: string; icon: LucideIcon; ready?: boolean; }

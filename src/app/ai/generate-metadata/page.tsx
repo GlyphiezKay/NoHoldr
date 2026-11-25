@@ -171,6 +171,7 @@ Only return valid JSON, no other text.`;
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
                         {images.map((img) => (
                             <div key={img.id} className="relative rounded-xl border overflow-hidden">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- Local file previews stay in the browser. */}
                                 <img src={img.url} alt="" className="w-full h-24 object-cover" />
                                 {img.isProcessing && (
                                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">

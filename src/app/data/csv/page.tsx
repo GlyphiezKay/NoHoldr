@@ -2,55 +2,26 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
+import { parseCSV, type CSVData } from "@/lib/csv-utils";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Upload, Download } from "lucide-react";
 
-interface CSVData {
-    headers: string[];
-    rows: string[][];
-}
 
 export default function CSVViewerPage() {
     const [data, setData] = useState<CSVData | null>(null);
     const [filename, setFilename] = useState("");
+    const [error, setError] = useState("");
     const [isDragging, setIsDragging] = useState(false);
 
-    const parseCSV = (text: string): CSVData => {
-        const lines = text.split(/\r?\n/).filter(line => line.trim());
-        if (lines.length === 0) return { headers: [], rows: [] };
-
-        const parseRow = (line: string): string[] => {
-            const result: string[] = [];
-            let current = "";
-            let inQuotes = false;
-
-            for (let i = 0; i < line.length; i++) {
-                const char = line[i];
-                if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === "," && !inQuotes) {
-                    result.push(current.trim());
-                    current = "";
-                } else {
-                    current += char;
-                }
-            }
-            result.push(current.trim());
-            return result;
-        };
-
-        const headers = parseRow(lines[0]);
-        const rows = lines.slice(1).map(parseRow);
-        return { headers, rows };
-    };
 
     const handleFile = useCallback((file: File) => {
         const reader = new FileReader();
         reader.onload = (e) => {
             const text = e.target?.result as string;
-            setData(parseCSV(text));
+            try { setData(parseCSV(text)); setError(""); } catch (err) { setData(null); setError(err instanceof Error ? err.message : "Invalid CSV"); }
             setFilename(file.name);
         };
+        reader.onerror = () => setError("Could not read file.");
         reader.readAsText(file);
     }, []);
 
@@ -88,6 +59,7 @@ export default function CSVViewerPage() {
                 <h1 className="text-lg font-semibold">CSV Viewer</h1>
             </div>
 
+            {error && <p role="alert" className="text-sm text-red-600 mb-4">{error}</p>}
             {!data ? (
                 <div
                     className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}

@@ -1,108 +1,82 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import Link from "next/link";
+import { useState } from "react";
+import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
+import { FilePicker } from "@/components/ui/file-picker";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Upload, Image as ImageIcon, Eye } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { downloadFile, formatBytes } from "@/lib/download-manager";
+import { openLocalImage } from "@/lib/image-processing";
 
-interface ImageMetadata {
-    width: number;
-    height: number;
-    type: string;
-    size: number;
-    name: string;
-}
+type Result = { file: File; width: number; height: number; metadata: Record<string, unknown>; metadataError: boolean };
 
 export default function ImageMetadataPage() {
-    const [file, setFile] = useState<File | null>(null);
-    const [imageUrl, setImageUrl] = useState<string | null>(null);
-    const [metadata, setMetadata] = useState<ImageMetadata | null>(null);
-    const [isDragging, setIsDragging] = useState(false);
+  const [result, setResult] = useState<Result | null>(null);
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-    const handleFile = useCallback((f: File) => {
-        if (!f.type.startsWith("image/")) return;
-        setFile(f);
-        const url = URL.createObjectURL(f);
-        setImageUrl(url);
+  async function read(files: File[]) {
+    if (files.length !== 1) { setError("Choose one image."); return; }
+    const file = files[0];
+    setBusy(true);
+    setError("");
+    try {
+      const image = await openLocalImage(file);
+      let metadata: Record<string, unknown> = {};
+      let metadataError = false;
+      try {
+        const { parse } = await import("exifr");
+        metadata = await parse(file, { tiff: true, exif: true, gps: true, xmp: true, iptc: true }) ?? {};
+      } catch {
+        metadataError = true;
+      }
+      setResult({ file, width: image.naturalWidth, height: image.naturalHeight, metadata, metadataError });
+      setQuery("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not open the image.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
-        const img = new Image();
-        img.onload = () => {
-            setMetadata({
-                width: img.width,
-                height: img.height,
-                type: f.type,
-                size: f.size,
-                name: f.name,
-            });
-        };
-        img.src = url;
-    }, []);
+  const tags = result ? Object.entries(result.metadata).map(([key, value]) => {
+    const text = value instanceof Date ? (Number.isFinite(value.getTime()) ? value.toISOString() : "Invalid date") : typeof value === "string" ? value : JSON.stringify(value) ?? "";
+    return { key, text };
+  }) : [];
+  const filtered = tags.filter(({ key, text }) => (key + " " + text).toLowerCase().includes(query.trim().toLowerCase()));
 
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-    }, [handleFile]);
-
-    const fmt = (b: number) => b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(1) + " KB" : (b / 1048576).toFixed(2) + " MB";
-
-    return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/image"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">View Image Metadata</h1>
-            </div>
-
-            {!file ? (
-                <div
-                    className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                    onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-                    onDrop={handleDrop}
-                    onClick={() => document.getElementById("img-input")?.click()}
-                >
-                    <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} className="hidden" id="img-input" />
-                    <ImageIcon className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm"><span className="font-medium">Drop image</span> <span className="text-muted-foreground">or tap</span></p>
-                </div>
-            ) : metadata && (
-                <>
-                    <div className="border rounded-xl p-4 mb-4">
-                        <div className="flex items-center justify-between mb-4">
-                            <span className="text-sm font-medium">{file.name}</span>
-                            <Button variant="ghost" size="sm" onClick={() => { setFile(null); setMetadata(null); }}>Change</Button>
-                        </div>
-                        <img src={imageUrl || ""} alt="Preview" className="w-full rounded-lg max-h-48 object-contain mb-4" />
-
-                        <div className="space-y-2 text-sm">
-                            <div className="grid grid-cols-3 gap-2 p-2 rounded bg-muted/30">
-                                <span className="text-muted-foreground">Dimensions</span>
-                                <span className="col-span-2 font-medium">{metadata.width} × {metadata.height} px</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 p-2 rounded bg-muted/30">
-                                <span className="text-muted-foreground">File Size</span>
-                                <span className="col-span-2 font-medium">{fmt(metadata.size)}</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 p-2 rounded bg-muted/30">
-                                <span className="text-muted-foreground">Type</span>
-                                <span className="col-span-2 font-medium">{metadata.type}</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 p-2 rounded bg-muted/30">
-                                <span className="text-muted-foreground">Aspect Ratio</span>
-                                <span className="col-span-2 font-medium">{(metadata.width / metadata.height).toFixed(2)}</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 p-2 rounded bg-muted/30">
-                                <span className="text-muted-foreground">Megapixels</span>
-                                <span className="col-span-2 font-medium">{((metadata.width * metadata.height) / 1000000).toFixed(2)} MP</span>
-                            </div>
-                        </div>
-                    </div>
-                </>
-            )}
-
-            <p className="text-xs text-muted-foreground text-center mt-6">Processed locally</p>
-        </div>
-    );
+  return (
+    <ToolWorkspace category="Image tools" backHref="/image" title="View Image Metadata" description="Inspect image dimensions and available EXIF, GPS, XMP, and IPTC tags.">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.65fr)]">
+        <ToolPanel title="Source image">
+          {result && <dl className="mb-3 space-y-1 rounded border bg-background p-3 text-sm">
+            <div className="break-all font-semibold">{result.file.name}</div>
+            <div><dt className="inline">Dimensions · </dt><dd className="inline">{result.width} × {result.height} px</dd></div>
+            <div><dt className="inline">File size · </dt><dd className="inline">{formatBytes(result.file.size)}</dd></div>
+          </dl>}
+          <FilePicker accept="image/*" action={result ? "Replace image" : "Choose image"} hint="Or drop an image here." disabled={busy} onFiles={read} />
+          {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+          {busy && <p role="status" className="mt-3 text-sm text-muted-foreground">Reading image metadata…</p>}
+        </ToolPanel>
+        <ToolPanel title="Metadata tags">
+          {!result && <p className="text-sm text-muted-foreground">Choose an image to inspect its tags.</p>}
+          {result?.metadataError && <p className="text-sm text-muted-foreground">The metadata block could not be read for this format or file.</p>}
+          {result && !result.metadataError && !tags.length && <p role="status" className="text-sm text-muted-foreground">No supported metadata tags found.</p>}
+          {result && tags.length > 0 && <>
+            <Input value={query} onChange={event => setQuery(event.target.value)} className="mb-4" type="search" aria-label="Find metadata" placeholder="Find a tag or value" />
+            {filtered.length ? <dl className="divide-y">
+              {filtered.map(({ key, text }) => <div key={key} className="grid gap-1 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                <dt className="wrap-anywhere text-muted-foreground">{key}</dt><dd className="wrap-anywhere font-medium">{text}</dd>
+              </div>)}
+            </dl> : <p role="status" className="text-sm text-muted-foreground">No matching tags.</p>}
+            <Button className="mt-4" variant="outline" onClick={() => {
+              const data = JSON.stringify({ file: result.file.name, width: result.width, height: result.height, tags: result.metadata }, null, 2);
+              downloadFile(new Blob([data], { type: "application/json" }), result.file.name + ".metadata.json");
+            }}>Download metadata JSON</Button>
+          </>}
+        </ToolPanel>
+      </div>
+    </ToolWorkspace>
+  );
 }

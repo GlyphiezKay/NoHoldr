@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload, Download, Music } from "lucide-react";
+import { ArrowLeft, Download, Music } from "lucide-react";
 
 export default function AudioConvertPage() {
     const [file, setFile] = useState<File | null>(null);
@@ -14,11 +14,11 @@ export default function AudioConvertPage() {
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [error, setError] = useState("");
     const audioRef = useRef<HTMLAudioElement>(null);
 
     const formats = [
         { value: "audio/wav", label: "WAV", ext: "wav" },
-        { value: "audio/webm", label: "WebM", ext: "webm" },
     ];
 
     const handleFile = useCallback((f: File) => {
@@ -41,10 +41,12 @@ export default function AudioConvertPage() {
         if (!file) return;
         setIsProcessing(true);
         setProgress(10);
+        setError("");
+        let audioContext: AudioContext | undefined;
 
         try {
+            audioContext = new AudioContext();
             // Create audio context
-            const audioContext = new AudioContext();
             const arrayBuffer = await file.arrayBuffer();
             setProgress(30);
 
@@ -74,10 +76,11 @@ export default function AudioConvertPage() {
             setOutputUrl(url);
             setProgress(100);
         } catch (error) {
-            console.error("Conversion failed:", error);
+            setError(error instanceof Error ? error.message : "Audio conversion failed.");
+        } finally {
+            if (audioContext) await audioContext.close();
+            setIsProcessing(false);
         }
-
-        setIsProcessing(false);
     };
 
     const audioBufferToWav = (buffer: AudioBuffer): Blob => {
@@ -152,6 +155,7 @@ export default function AudioConvertPage() {
                 <h1 className="text-lg font-semibold">Convert Audio</h1>
             </div>
 
+            {error && <p role="alert" className="text-sm text-red-600 mb-4">{error}</p>}
             {!file ? (
                 <div
                     className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}

@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import Link from "next/link";
+import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
+import { FilePicker } from "@/components/ui/file-picker";
+import { csvToJSON, jsonToCSV } from "@/lib/csv-utils";
+import { recordVideo, extractVideoFrame as readVideoFrame } from "@/lib/video-utils";
 import {
     Upload, FileText, Image, Music, Video, FileArchive, Database,
-    AlertCircle, X, Download, Loader2, ArrowLeft, Info
+    AlertCircle, Download, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -44,23 +47,14 @@ const IMAGE_FORMATS: TargetFormat[] = [
     { id: "jpg", format: "JPG", description: "Lossy, smaller size", mimeType: "image/jpeg", extension: "jpg" },
     { id: "png", format: "PNG", description: "Lossless, transparency", mimeType: "image/png", extension: "png" },
     { id: "webp", format: "WEBP", description: "Modern, efficient", mimeType: "image/webp", extension: "webp" },
-    { id: "avif", format: "AVIF", description: "Next-gen, tiny", mimeType: "image/avif", extension: "avif" },
-    { id: "bmp", format: "BMP", description: "Uncompressed", mimeType: "image/bmp", extension: "bmp" },
-    { id: "gif", format: "GIF", description: "Simple images", mimeType: "image/gif", extension: "gif" },
-    { id: "ico", format: "ICO", description: "Favicon icon", mimeType: "image/x-icon", extension: "ico" },
 ];
 
 const DOCUMENT_FORMATS: TargetFormat[] = [
     { id: "pdf", format: "PDF", description: "Universal document", mimeType: "application/pdf", extension: "pdf" },
-    { id: "txt", format: "TXT", description: "Plain text", mimeType: "text/plain", extension: "txt" },
-    { id: "html", format: "HTML", description: "Web page", mimeType: "text/html", extension: "html" },
-    { id: "md", format: "MD", description: "Markdown", mimeType: "text/markdown", extension: "md" },
 ];
 
 const AUDIO_FORMATS: TargetFormat[] = [
     { id: "wav", format: "WAV", description: "Uncompressed audio", mimeType: "audio/wav", extension: "wav" },
-    { id: "ogg", format: "OGG", description: "Open format, Opus", mimeType: "audio/ogg", extension: "ogg" },
-    { id: "webm-audio", format: "WEBM", description: "WebM Audio", mimeType: "audio/webm", extension: "webm" },
 ];
 
 const VIDEO_FORMATS: TargetFormat[] = [
@@ -97,7 +91,6 @@ const CATEGORY_FORMAT_GROUPS: Record<FileCategory, FormatGroup[]> = {
 
 export default function SmartConvertPage() {
     const [detectedFile, setDetectedFile] = useState<DetectedFile | null>(null);
-    const [isDragging, setIsDragging] = useState(false);
     const [selectedFormat, setSelectedFormat] = useState<TargetFormat | null>(null);
     const [isConverting, setIsConverting] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -112,12 +105,6 @@ export default function SmartConvertPage() {
         setError(null);
         setWarning(null);
     }, []);
-
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-    }, [handleFile]);
 
     const clearFile = () => {
         setDetectedFile(null);
@@ -171,7 +158,7 @@ export default function SmartConvertPage() {
             // Video to WebM
             else if (detectedFile.category === "video" && ["webm-vp9", "webm-vp8"].includes(selectedFormat.id)) {
                 setWarning("Video transcoding is resource-intensive. This may take a while.");
-                const blob = await convertVideoToWebm(file);
+                const blob = await convertVideoToWebm(file, selectedFormat.id);
                 results.push({ name: file.name.replace(/\.[^.]+$/, ".webm"), blob });
             }
             // Video to Image (frame extraction)
@@ -188,6 +175,7 @@ export default function SmartConvertPage() {
                 throw new Error("Conversion not supported");
             }
 
+            if (!results.length) throw new Error("No output was generated for this conversion.");
             setProgress(100);
             setConvertedBlobs(results);
         } catch (err) {
@@ -210,7 +198,7 @@ export default function SmartConvertPage() {
                 if (!ctx) { reject(new Error("Canvas error")); return; }
                 ctx.drawImage(img, 0, 0);
                 setProgress(80);
-                canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Conversion failed")), targetMime, 0.92);
+                canvas.toBlob((blob) => blob && blob.type === targetMime ? resolve(blob) : reject(new Error("Output format is unsupported by this browser")), targetMime, 0.92);
             };
             img.onerror = () => reject(new Error("Failed to load image"));
             img.src = URL.createObjectURL(file);
@@ -253,7 +241,7 @@ export default function SmartConvertPage() {
             await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
 
             const blob = await new Promise<Blob>((res, rej) => {
-                canvas.toBlob((b) => b ? res(b) : rej(new Error("Failed")), mimeType, 0.92);
+                canvas.toBlob((b) => b && b.type === mimeType ? res(b) : rej(new Error("Output format is unsupported by this browser")), mimeType, 0.92);
             });
             results.push({ name: `${baseName}-page${i}.${ext}`, blob });
         }
@@ -326,11 +314,15 @@ export default function SmartConvertPage() {
         const audioContext = new AudioContext();
         const arrayBuffer = await file.arrayBuffer();
         setProgress(30);
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        setProgress(60);
-        const wavBuffer = audioBufferToWav(audioBuffer);
-        setProgress(90);
-        return new Blob([wavBuffer], { type: "audio/wav" });
+        try {
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            setProgress(60);
+            const wavBuffer = audioBufferToWav(audioBuffer);
+            setProgress(90);
+            return new Blob([wavBuffer], { type: "audio/wav" });
+        } finally {
+            await audioContext.close();
+        }
     };
 
     const audioBufferToWav = (buffer: AudioBuffer): ArrayBuffer => {
@@ -361,59 +353,9 @@ export default function SmartConvertPage() {
         return arrayBuffer;
     };
 
-    const convertVideoToWebm = async (file: File): Promise<Blob> => {
-        return new Promise((resolve, reject) => {
-            const video = document.createElement("video");
-            video.src = URL.createObjectURL(file);
-            video.muted = true;
-            video.onloadedmetadata = async () => {
-                const canvas = document.createElement("canvas");
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext("2d")!;
-                const stream = canvas.captureStream(30);
-                const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
-                const chunks: Blob[] = [];
-                recorder.ondataavailable = (e) => chunks.push(e.data);
-                recorder.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }));
-                recorder.start();
-                video.play();
-                const duration = Math.min(video.duration, 60); // Cap at 60s
-                const interval = setInterval(() => {
-                    ctx.drawImage(video, 0, 0);
-                    setProgress(10 + (80 * video.currentTime / duration));
-                }, 1000 / 30);
-                setTimeout(() => {
-                    clearInterval(interval);
-                    recorder.stop();
-                    video.pause();
-                }, duration * 1000);
-            };
-            video.onerror = () => reject(new Error("Failed to load video"));
-        });
-    };
+    const convertVideoToWebm = (file: File, codec: string): Promise<Blob> => recordVideo(file, { mimeType: codec === "webm-vp8" ? "video/webm;codecs=vp8,opus" : "video/webm;codecs=vp9,opus", onProgress: p => setProgress(10 + p * 0.8) });
 
-    const extractVideoFrame = async (file: File, targetMime: string): Promise<Blob> => {
-        return new Promise((resolve, reject) => {
-            const video = document.createElement("video");
-            video.src = URL.createObjectURL(file);
-            video.muted = true;
-            video.currentTime = 1;
-            video.onloadeddata = () => {
-                video.onseeked = () => {
-                    setProgress(50);
-                    const canvas = document.createElement("canvas");
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext("2d")!;
-                    ctx.drawImage(video, 0, 0);
-                    setProgress(80);
-                    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Failed")), targetMime, 0.92);
-                };
-            };
-            video.onerror = () => reject(new Error("Failed to load video"));
-        });
-    };
+    const extractVideoFrame = (file: File, targetMime: string): Promise<Blob> => readVideoFrame(file, 1, targetMime);
 
     const convertData = async (file: File, targetId: string): Promise<Blob> => {
         const text = await file.text();
@@ -421,20 +363,9 @@ export default function SmartConvertPage() {
         const ext = file.name.split(".").pop()?.toLowerCase();
         let result: string;
         if (ext === "json" && targetId === "csv") {
-            const data = JSON.parse(text);
-            if (Array.isArray(data) && data.length > 0) {
-                const headers = Object.keys(data[0]);
-                const rows = data.map((item: Record<string, unknown>) => headers.map(h => JSON.stringify(item[h] ?? "")).join(","));
-                result = [headers.join(","), ...rows].join("\n");
-            } else throw new Error("JSON must be an array of objects");
+            result = jsonToCSV(JSON.parse(text));
         } else if (ext === "csv" && targetId === "json") {
-            const lines = text.trim().split("\n");
-            const headers = lines[0].split(",").map(h => h.trim());
-            const data = lines.slice(1).map(line => {
-                const values = line.split(",");
-                return headers.reduce((obj, h, i) => ({ ...obj, [h]: values[i]?.trim() }), {});
-            });
-            result = JSON.stringify(data, null, 2);
+            result = JSON.stringify(csvToJSON(text), null, 2);
         } else throw new Error("Unsupported data conversion");
         setProgress(80);
         return new Blob([result], { type: targetId === "json" ? "application/json" : "text/csv" });
@@ -455,127 +386,84 @@ export default function SmartConvertPage() {
         await downloadAsZip(convertedBlobs, `${baseName}_converted.zip`);
     };
 
-    const formatGroups = detectedFile ? CATEGORY_FORMAT_GROUPS[detectedFile.category] || [] : [];
+    const formatGroups = detectedFile ? (CATEGORY_FORMAT_GROUPS[detectedFile.category] || []).map(group => ({
+        ...group,
+        formats: group.formats.filter(format => {
+            if (detectedFile.category === "document") return detectedFile.extension === "docx";
+            if (detectedFile.category === "data") return (detectedFile.extension === "csv" && format.id === "json") || (detectedFile.extension === "json" && format.id === "csv");
+            return true;
+        }),
+    })).filter(group => group.formats.length > 0) : [];
     const CategoryIcon = detectedFile ? CATEGORY_ICONS[detectedFile.category] : Upload;
 
     return (
-        <div className="max-w-3xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <div>
-                    <h1 className="text-xl font-semibold">Smart Convert</h1>
-                    <p className="text-xs text-muted-foreground">Drop a file, pick a format</p>
+      <ToolWorkspace category="All tools" backHref="/" title="Smart Convert" description="Pick a file to see formats that can be generated for it.">
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          <ToolPanel title="Source file" description="Choose one file at a time."
+            action={detectedFile && <Button variant="ghost" size="sm" disabled={isConverting} onClick={clearFile}>Remove file</Button>}>
+            {detectedFile && (
+              <div className={`mb-4 flex items-center gap-3 rounded-xl border p-3 ${CATEGORY_COLORS[detectedFile.category]}`}>
+                <CategoryIcon className="size-6 shrink-0" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="break-all text-sm font-semibold">{detectedFile.file.name}</p>
+                  <p className="text-sm">{detectedFile.displayType} · {formatFileSize(detectedFile.file.size)}</p>
                 </div>
-            </div>
-
-            {!detectedFile ? (
-                <div
-                    className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-muted-foreground/40"}`}
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                    onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-                    onDrop={handleDrop}
-                    onClick={() => document.getElementById("file-input")?.click()}
-                >
-                    <input type="file" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} className="hidden" id="file-input" />
-                    <Upload className={`h-10 w-10 mx-auto mb-3 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
-                    <p className="text-lg font-medium mb-1">Drop any file</p>
-                    <p className="text-sm text-muted-foreground">to see conversion options</p>
-                </div>
-            ) : (
-                <div className="space-y-6">
-                    <div className={`rounded-xl border p-4 ${CATEGORY_COLORS[detectedFile.category]}`}>
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-white/80 dark:bg-black/20">
-                                <CategoryIcon className="h-6 w-6" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">{detectedFile.file.name}</p>
-                                <p className="text-sm opacity-80">{detectedFile.displayType} • {formatFileSize(detectedFile.file.size)}</p>
-                            </div>
-                            <Button variant="ghost" size="icon" onClick={clearFile}><X className="h-4 w-4" /></Button>
-                        </div>
-                    </div>
-
-                    {detectedFile.category === "unsupported" && (
-                        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-4">
-                            <p className="text-sm text-amber-800 dark:text-amber-200">This file type is not supported for conversion.</p>
-                        </div>
-                    )}
-
-                    {formatGroups.length > 0 && (
-                        <div className="space-y-4">
-                            <p className="text-sm font-medium text-muted-foreground">Convert to:</p>
-                            {formatGroups.map((group) => (
-                                <div key={group.name} className="space-y-2">
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide">
-                                        <group.icon className="h-3.5 w-3.5" />{group.name}
-                                    </div>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                        {group.formats.map((format) => (
-                                            <button
-                                                key={format.id}
-                                                onClick={() => setSelectedFormat(format)}
-                                                disabled={isConverting}
-                                                className={`p-3 rounded-xl border text-left transition-all ${selectedFormat?.id === format.id ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-muted-foreground/20 hover:border-muted-foreground/40"} ${isConverting ? "opacity-50" : ""}`}
-                                            >
-                                                <p className="font-semibold text-sm">{format.format}</p>
-                                                <p className="text-xs text-muted-foreground">{format.description}</p>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {warning && (
-                        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-3 flex gap-2">
-                            <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                            <p className="text-sm text-amber-800 dark:text-amber-200">{warning}</p>
-                        </div>
-                    )}
-
-                    {error && (
-                        <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20 p-4">
-                            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-                        </div>
-                    )}
-
-                    {isConverting && <Progress value={progress} className="h-2" />}
-
-                    <div className="flex gap-3">
-                        {convertedBlobs.length === 0 ? (
-                            <Button onClick={convert} disabled={!selectedFormat || isConverting} className="flex-1">
-                                {isConverting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Converting...</> : `Convert to ${selectedFormat?.format || "..."}`}
-                            </Button>
-                        ) : (
-                            <div className="flex-1 space-y-2">
-                                {convertedBlobs.length > 1 && (
-                                    <Button onClick={downloadAllAsZip} className="w-full">
-                                        <Download className="h-4 w-4 mr-2" />Download as ZIP ({convertedBlobs.length} files)
-                                    </Button>
-                                )}
-                                {convertedBlobs.map((item, i) => (
-                                    <Button key={i} onClick={() => downloadBlob(item.name, item.blob)} variant="outline" className="w-full justify-start">
-                                        <Download className="h-4 w-4 mr-2" />{item.name}
-                                    </Button>
-                                ))}
-                                <Button variant="ghost" onClick={() => { setConvertedBlobs([]); setSelectedFormat(null); }} className="w-full">
-                                    Convert Again
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="text-center">
-                        <Button variant="ghost" size="sm" onClick={clearFile}>Drop another file</Button>
-                    </div>
-                </div>
+              </div>
             )}
+            <FilePicker action={detectedFile ? "Replace file" : "Choose file"} hint="Or drop a file here." disabled={isConverting}
+              onFiles={files => {
+                if (files.length > 1) { setError("Choose one file at a time."); return; }
+                handleFile(files[0]);
+              }} />
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">Try an image, PDF, DOCX, audio, video, CSV, or JSON file.</p>
+          </ToolPanel>
 
-            <p className="text-xs text-muted-foreground text-center mt-8">All conversions run locally in your browser</p>
+          <div className="min-w-0 space-y-5">
+            <ToolPanel title="Output format" description={detectedFile ? "Select a format and run the conversion." : "Add a source file to see its available formats."}>
+              {detectedFile && formatGroups.length === 0 && <p role="status" className="rounded-xl bg-accent p-3 text-sm">No conversion is available for this file type. Try a different source file.</p>}
+              {formatGroups.length > 0 && (
+                <div className="space-y-4">
+                  {formatGroups.map(group => (
+                    <fieldset key={group.name}>
+                      <legend className="mb-2 text-sm font-semibold">{group.name}</legend>
+                      <div className="grid grid-cols-2 gap-2">
+                        {group.formats.map(format => (
+                          <label key={format.id} className="relative block cursor-pointer rounded-xl border p-3 has-checked:border-primary has-checked:bg-accent has-focus-visible:outline-2 has-disabled:cursor-not-allowed">
+                            <input className="sr-only" type="radio" name="format" value={format.id} checked={selectedFormat?.id === format.id}
+                              disabled={isConverting} onChange={() => { setSelectedFormat(format); setError(null); }} />
+                            <span className="block text-sm font-semibold">{format.format}</span>
+                            <span className="block text-sm text-muted-foreground">{format.description}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  ))}
+                  <Button size="lg" className="w-full" onClick={convert} disabled={!selectedFormat || isConverting}>
+                    {isConverting ? <><Loader2 className="animate-spin" />Converting…</> : selectedFormat ? `Convert to ${selectedFormat.format}` : "Convert file"}
+                  </Button>
+                </div>
+              )}
+              {isConverting && <Progress aria-label="Conversion progress" value={progress} className="mt-4" />}
+              {warning && <p role="status" className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">{warning}</p>}
+              {error && <p role="alert" className="mt-4 text-sm text-destructive">{error}</p>}
+            </ToolPanel>
+
+            {convertedBlobs.length > 0 && (
+              <ToolPanel title="Results" description="Download your files, or select another format to convert the same source again.">
+                <div className="space-y-2">
+                  {convertedBlobs.length > 1 && (
+                    <Button onClick={downloadAllAsZip} className="w-full"><Download /> Download as ZIP ({convertedBlobs.length} files)</Button>
+                  )}
+                  {convertedBlobs.map((item, index) => (
+                    <Button key={index} onClick={() => downloadBlob(item.name, item.blob)} variant="outline" className="w-full min-w-0 justify-start">
+                      <Download /><span className="truncate" title={item.name}>{item.name}</span>
+                    </Button>
+                  ))}
+                </div>
+              </ToolPanel>
+            )}
+          </div>
         </div>
+      </ToolWorkspace>
     );
 }

@@ -1,6 +1,10 @@
 # Legal Notice & Responsibility Boundaries
 
-This document clarifies legal responsibilities for NoHoldr and any derivative works.
+This document clarifies legal responsibilities for NoHoldr and any derivative works. It is informational and does not add conditions to the MIT License.
+
+## License
+
+NoHoldr is licensed under the [MIT License](LICENSE). Effective November 25, 2026, the NoHoldr Attribution License (NAL) is retired and no longer applies to this project. The MIT License replaces NAL, including its additional attribution, naming, and indemnification requirements.
 
 ---
 
@@ -23,7 +27,7 @@ NoHoldr is an **open source project** provided freely for:
 
 ## What the Original Author Controls
 
-The original author (Deviantkay) maintains:
+The original author (GlyphiezKay) maintains:
 
 - This specific repository and codebase
 - Documentation for the original project
@@ -117,9 +121,9 @@ This software processes files **locally in your browser**. However:
 
 For questions about this legal notice:
 
-- **GitHub:** [Deviantkay](https://github.com/Deviantkay)
-- **Repository:** [NoHoldr](https://github.com/Deviantkay/NoHoldr)
+- **GitHub:** [GlyphiezKay](https://github.com/GlyphiezKay)
+- **Repository:** [NoHoldr](https://github.com/GlyphiezKay/NoHoldr)
 
 ---
 
-*Last updated: January 2026*
+*Last updated: November 25, 2026*

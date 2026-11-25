@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,23 +22,24 @@ export default function CreateZIPPage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
 
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        addFiles(Array.from(e.dataTransfer.files));
-    }, []);
-
-    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) addFiles(Array.from(e.target.files));
-    }, []);
-
     const addFiles = (newFiles: File[]) => {
-        setFiles(prev => [...prev, ...newFiles.map(f => ({
+        const added = newFiles.map(f => ({
             id: crypto.randomUUID(),
             file: f,
             name: f.name,
             size: f.size,
-        }))]);
+        }));
+        setFiles(prev => [...prev, ...added]);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        addFiles(Array.from(e.dataTransfer.files));
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) addFiles(Array.from(e.target.files));
     };
 
     const removeFile = (id: string) => setFiles(files.filter(f => f.id !== id));

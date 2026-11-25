@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, FileText, Download, Image, PackageOpen, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Download, Image as ImageIcon, PackageOpen, AlertTriangle } from "lucide-react";
 import { downloadFile, downloadAsZip, formatBytes } from "@/lib/download-manager";
 
 interface PageResult {
@@ -277,7 +277,7 @@ export default function PDFToImagesPage() {
                             <div className="space-y-1.5 max-h-60 overflow-y-auto">
                                 {results.map((item, i) => (
                                     <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm">
-                                        <Image className="h-4 w-4 text-blue-500 shrink-0" />
+                                        <ImageIcon aria-hidden="true" className="h-4 w-4 text-blue-500 shrink-0" />
                                         <span className="flex-1 truncate">{item.name}</span>
                                         <span className="text-xs text-muted-foreground">{formatBytes(item.size)}</span>
                                         <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => handleDownloadSingle(item)}>
@@ -293,7 +293,7 @@ export default function PDFToImagesPage() {
                     {results.length === 0 && (
                         <Button onClick={convert} disabled={isProcessing} className="w-full h-11">
                             {isProcessing ? statusText : (
-                                <><Image className="h-4 w-4 mr-2" />Convert to {formatExt.toUpperCase()}</>
+                                <><ImageIcon aria-hidden="true" className="h-4 w-4 mr-2" />Convert to {formatExt.toUpperCase()}</>
                             )}
                         </Button>
                     )}

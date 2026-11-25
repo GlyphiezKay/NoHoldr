@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { recordVideo } from "@/lib/video-utils";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, Download, Video, Gauge, AlertTriangle, Info } from "lucide-react";
+import { ArrowLeft, Download, Video, Gauge, AlertTriangle, Info } from "lucide-react";
 import { downloadFile, formatBytes } from "@/lib/download-manager";
 
 export default function VideoCompressPage() {
@@ -46,68 +47,7 @@ export default function VideoCompressPage() {
         setStatusText("Loading video...");
 
         try {
-            const video = document.createElement("video");
-            const videoUrl = URL.createObjectURL(file);
-            video.src = videoUrl;
-            video.muted = true;
-
-            await new Promise<void>((resolve, reject) => {
-                video.onloadedmetadata = () => resolve();
-                video.onerror = () => reject(new Error("Failed to load video"));
-            });
-
-            setStatusText(`Compressing (${Math.round(video.duration)}s video)...`);
-
-            // Scale down based on quality
-            const scale = quality[0] / 100;
-            const canvas = document.createElement("canvas");
-            canvas.width = Math.round(video.videoWidth * scale);
-            canvas.height = Math.round(video.videoHeight * scale);
-            const ctx = canvas.getContext("2d")!;
-
-            const stream = canvas.captureStream(24);
-
-            // Lower bitrate for compression
-            const bitrate = Math.round(1000000 * scale);
-            const recorder = new MediaRecorder(stream, {
-                mimeType: "video/webm",
-                videoBitsPerSecond: bitrate
-            });
-            const chunks: Blob[] = [];
-
-            recorder.ondataavailable = (e) => chunks.push(e.data);
-
-            const resultPromise = new Promise<Blob>((resolve) => {
-                recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: "video/webm" });
-                    resolve(blob);
-                };
-            });
-
-            recorder.start();
-            video.play();
-
-            const duration = video.duration;
-            const drawFrame = () => {
-                if (abortRef.current) {
-                    video.pause();
-                    recorder.stop();
-                    return;
-                }
-                if (video.ended || video.paused) {
-                    recorder.stop();
-                    return;
-                }
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                setProgress(Math.round((video.currentTime / duration) * 100));
-                requestAnimationFrame(drawFrame);
-            };
-            drawFrame();
-
-            video.onended = () => recorder.stop();
-
-            const blob = await resultPromise;
-            URL.revokeObjectURL(videoUrl);
+            const blob = await recordVideo(file, { fps: 24, scale: quality[0] / 100, bitrate: Math.round(1000000 * quality[0] / 100), cancelled: () => abortRef.current, onProgress: setProgress });
 
             if (abortRef.current) {
                 setIsProcessing(false);

@@ -11,6 +11,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 const STORAGE_KEY = "noholdr_gemini_api_key";
+const KEY_CHANGE_EVENT = "noholdr:gemini-key-change";
 const MODEL = "gemini-3-flash-preview";
 
 // API Key Management
@@ -22,15 +23,31 @@ export function getApiKey(): string | null {
 export function setApiKey(key: string): void {
     if (typeof window === "undefined") return;
     localStorage.setItem(STORAGE_KEY, key);
+    window.dispatchEvent(new Event(KEY_CHANGE_EVENT));
 }
 
 export function clearApiKey(): void {
     if (typeof window === "undefined") return;
     localStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new Event(KEY_CHANGE_EVENT));
 }
 
 export function hasApiKey(): boolean {
     return !!getApiKey();
+}
+
+export function subscribeToApiKey(onChange: () => void): () => void {
+    const onStorage = (event: StorageEvent) => {
+        if (event.storageArea === localStorage && (event.key === STORAGE_KEY || event.key === null)) {
+            onChange();
+        }
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(KEY_CHANGE_EVENT, onChange);
+    return () => {
+        window.removeEventListener("storage", onStorage);
+        window.removeEventListener(KEY_CHANGE_EVENT, onChange);
+    };
 }
 
 // Create Gemini client

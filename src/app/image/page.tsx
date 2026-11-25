@@ -1,81 +1,70 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { LucideIcon } from "lucide-react";
 import {
-    ArrowLeft,
-    Minimize2,
-    Maximize2,
-    Crop,
-    RotateCw,
-    FileImage,
-    Eye,
-    Pen,
-    Trash2,
-    Layers,
-    Droplet,
-    Stamp
+  Aperture, Blend, Crop, Eye, FileImage, FileText, Film, Focus, Maximize2, Minimize2, Palette, RotateCw, Search, SquarePen, Stamp, Trash2, Type,
 } from "lucide-react";
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-interface Tool {
-    name: string;
-    href: string;
-    icon: LucideIcon;
-    ready?: boolean;
-}
-
-const editTools: Tool[] = [
-    { name: "Compress", href: "/image/compress", icon: Minimize2, ready: true },
-    { name: "Resize", href: "/image/resize", icon: Maximize2, ready: true },
-    { name: "Crop", href: "/image/crop", icon: Crop, ready: true },
-    { name: "Rotate", href: "/image/rotate", icon: RotateCw, ready: true },
-    { name: "Watermark", href: "/image/watermark", icon: Stamp, ready: true },
+const groups = [
+  { title: "Size and dimensions", tools: [
+    { title: "Compress Images", href: "/image/compress", icon: Minimize2, description: "Batch compress by quality or target KB per image." },
+    { title: "Resize Images", href: "/image/resize", icon: Maximize2, description: "Set exact sizes, fit within a box, or use a percentage." },
+    { title: "Upscale Images", href: "/image/upscale", icon: Focus, description: "Enlarge images up to 4× with high-quality resampling." },
+  ] },
+  { title: "Edit and create", tools: [
+    { title: "Crop Images", href: "/image/crop", icon: Crop, description: "Select a crop by hand or apply a batch crop." },
+    { title: "Rotate and Flip", href: "/image/rotate", icon: RotateCw, description: "Rotate or mirror multiple images in one batch." },
+    { title: "Photo Editor", href: "/image/edit", icon: SquarePen, description: "Adjust colors and exposure or place a caption." },
+    { title: "Watermark Images", href: "/image/watermark", icon: Stamp, description: "Add a text watermark or logo." },
+    { title: "Meme Generator", href: "/image/meme", icon: Type, description: "Add customizable top and bottom text." },
+    { title: "Make Animated GIF", href: "/image/gif", icon: Film, description: "Turn ordered images into a looping animation." },
+    { title: "Extract Colors", href: "/data/color-extractor", icon: Palette, description: "Inspect the colors in an image." },
+  ] },
+  { title: "Convert and export", tools: [
+    { title: "Convert Images", href: "/image/convert", icon: FileImage, description: "Convert a batch to JPEG, WebP, PNG, BMP, GIF, ICO, or other available formats." },
+    { title: "Images to PDF", href: "/pdf/from-images", icon: FileText, description: "Combine images into a PDF, one image per page." },
+    { title: "HTML to Image", href: "/image/html", icon: FileImage, description: "Render local HTML into a PNG or JPEG." },
+  ] },
+  { title: "Privacy and cleanup", tools: [
+    { title: "Hide Image Areas", href: "/image/blur", icon: Aperture, description: "Pixelate or cover selected regions such as faces and license plates." },
+    { title: "Remove Color Background", href: "/image/remove-background", icon: Blend, description: "Remove a selected background color and export transparency." },
+    { title: "View Image Metadata", href: "/image/metadata", icon: Eye, description: "Inspect available EXIF, GPS, XMP, and IPTC tags." },
+    { title: "Remove Image Metadata", href: "/image/remove-metadata", icon: Trash2, description: "Re-encode image pixels to remove source metadata in a batch." },
+  ] },
 ];
-
-const convertTools: Tool[] = [
-    { name: "Convert", href: "/image/convert", icon: FileImage, ready: true },
-];
-
-const metadataTools: Tool[] = [
-    { name: "View EXIF", href: "/image/metadata", icon: Eye, ready: true },
-    { name: "Remove EXIF", href: "/image/remove-metadata", icon: Trash2, ready: true },
-];
-
-function ToolSection({ title, tools }: { title: string; tools: Tool[] }) {
-    return (
-        <section className="mb-8">
-            <h2 className="text-sm font-medium text-muted-foreground mb-3">{title}</h2>
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                {tools.map((tool) => (
-                    <Link
-                        key={tool.name}
-                        href={tool.href}
-                        className={`flex flex-col items-center justify-center p-3 sm:p-4 rounded-lg border bg-card transition-all duration-150 ${tool.ready ? "hover:border-foreground/30 hover:shadow-sm active:scale-[0.98]" : "opacity-40 pointer-events-none"}`}
-                    >
-                        <tool.icon className="h-5 w-5 mb-1.5 text-muted-foreground" />
-                        <span className="text-xs font-medium text-center leading-tight">{tool.name}</span>
-                    </Link>
-                ))}
-            </div>
-        </section>
-    );
-}
 
 export default function ImageToolsPage() {
-    return (
-        <div className="max-w-5xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                    <Link href="/"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <div>
-                    <h1 className="text-xl font-semibold">Image Tools</h1>
-                    <p className="text-xs text-muted-foreground">Local processing only</p>
-                </div>
-            </div>
+  const [query, setQuery] = useState("");
+  const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const filtered = groups.map(group => ({ ...group, tools: group.tools.filter(tool =>
+    words.every(word => (tool.title + " " + tool.description).toLowerCase().includes(word))) })).filter(group => group.tools.length);
+  const count = filtered.reduce((sum, group) => sum + group.tools.length, 0);
 
-            <ToolSection title="EDIT" tools={editTools} />
-            <ToolSection title="CONVERT" tools={convertTools} />
-            <ToolSection title="METADATA" tools={metadataTools} />
-        </div>
-    );
+  return (
+    <ToolWorkspace category="All tools" backHref="/" title="Image tools" description="Compress, resize, edit, and export images without uploading them.">
+      <div className="relative mb-6 max-w-lg">
+        <Search className="pointer-events-none absolute top-3 left-3 size-4 text-muted-foreground" aria-hidden="true" />
+        <Input value={query} onChange={event => setQuery(event.target.value)} className="h-10 bg-card pl-9" type="search" aria-label="Find an image tool" placeholder="Find an image tool" />
+      </div>
+      {words.length > 0 && <p role="status" className="mb-3 text-sm text-muted-foreground">{count} {count === 1 ? "tool" : "tools"} found</p>}
+      {!count && <Button variant="outline" onClick={() => setQuery("")}>Clear search</Button>}
+      <div className="space-y-8">
+        {filtered.map(group => <section key={group.title}>
+          <h2 className="mb-3 text-xl font-semibold tracking-tight">{group.title}</h2>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {group.tools.map(({ title, href, icon: Icon, description }) => <li key={href}>
+              <Link href={href} className="flex h-full items-start gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-ring hover:bg-accent focus-visible:outline-2">
+                <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent text-primary"><Icon className="size-5" aria-hidden="true" /></span>
+                <div><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p></div>
+              </Link>
+            </li>)}
+          </ul>
+        </section>)}
+      </div>
+    </ToolWorkspace>
+  );
 }

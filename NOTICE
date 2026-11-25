@@ -1,7 +1,7 @@
 # NoHoldr Third-Party Notices
 
 > This file lists third-party open-source components used in NoHoldr.  
-> These components are subject to their own license terms, not the NoHoldr Attribution License (NAL).
+> These components remain subject to their own license terms. NoHoldr itself is licensed under the MIT License.
 
 ---
 
@@ -11,6 +11,14 @@
 |-----------|---------|--------|
 | **pdf-lib** | MIT | [github.com/Hopding/pdf-lib](https://github.com/Hopding/pdf-lib) |
 | **PDF.js** | Apache 2.0 | [mozilla.github.io/pdf.js](https://mozilla.github.io/pdf.js/) |
+| **qpdf-wasm** | MIT wrapper, Apache 2.0 qpdf with bundled library notices | [github.com/arshad-shah/qpdf-wasm](https://github.com/arshad-shah/qpdf-wasm) |
+| **Tesseract.js and core** | Apache 2.0 | [github.com/naptha/tesseract.js](https://github.com/naptha/tesseract.js) |
+| **Tesseract language packages** | Apache 2.0 trained data, MIT packaging | [github.com/tesseract-ocr/tessdata_best](https://github.com/tesseract-ocr/tessdata_best) |
+| **LibreOffice WASM** | MIT loader, MPL 2.0 LibreOffice distribution with bundled font licenses | [Source and release](https://github.com/eze-paz/libreoffice-wasm/tree/v0.2.0) |
+| **Compact ICC Profiles** | CC0 1.0 | [sRGB v2 profile](https://github.com/saucecontrol/Compact-ICC-Profiles/blob/bdd84663/profiles/sRGB-v2-micro.icc) |
+| **docx** | MIT | [github.com/dolanmiu/docx](https://github.com/dolanmiu/docx) |
+| **PptxGenJS** | MIT | [github.com/gitbrent/PptxGenJS](https://github.com/gitbrent/PptxGenJS) |
+| **write-excel-file** | MIT | [github.com/catamphetamine/write-excel-file](https://github.com/catamphetamine/write-excel-file) |
 
 ---
 
@@ -20,6 +28,9 @@
 |-----------|---------|--------|
 | **Piexifjs** | MIT | [github.com/hMatoba/piexifjs](https://github.com/hMatoba/piexifjs) |
 | **Cropper.js** | MIT | [github.com/fengyuanchen/cropperjs](https://github.com/fengyuanchen/cropperjs) |
+| **exifr** | MIT | [github.com/MikeKovarik/exifr](https://github.com/MikeKovarik/exifr) |
+| **gifenc** | MIT | [github.com/mattdesl/gifenc](https://github.com/mattdesl/gifenc) |
+| **jSquash AVIF** | Apache 2.0 | [github.com/jamsinclair/jSquash](https://github.com/jamsinclair/jSquash) |
 
 ---
 
@@ -72,4 +83,4 @@
 | **Document** | NoHoldr Third-Party Notices |
 | **Version** | 1.0 |
 | **Last Updated** | January 2025 |
-| **Maintainer** | Deviantkay |
+| **Maintainer** | GlyphiezKay |

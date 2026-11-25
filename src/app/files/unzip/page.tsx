@@ -3,8 +3,9 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Upload, Download, File, FolderArchive } from "lucide-react";
+import { ArrowLeft, Download, File, FolderArchive } from "lucide-react";
 import JSZip from "jszip";
+import { downloadFile as saveFile } from "@/lib/download-manager";
 
 interface ExtractedFile {
     name: string;
@@ -17,12 +18,15 @@ export default function ExtractZIPPage() {
     const [zipName, setZipName] = useState("");
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState("");
 
     const handleFile = useCallback(async (file: File) => {
-        if (!file.name.endsWith(".zip")) return;
+        if (!/\.zip$/i.test(file.name)) { setError("Please choose a ZIP archive."); return; }
 
         setIsProcessing(true);
         setZipName(file.name);
+        setError("");
+        setFiles([]);
 
         try {
             const zip = await JSZip.loadAsync(file);
@@ -36,8 +40,9 @@ export default function ExtractZIPPage() {
             }
 
             setFiles(extracted);
+            if (!extracted.length) setError("This ZIP archive contains no files.");
         } catch (e) {
-            console.error("Failed to extract:", e);
+            setError(e instanceof Error ? e.message : "Could not extract ZIP archive.");
         }
 
         setIsProcessing(false);
@@ -55,20 +60,14 @@ export default function ExtractZIPPage() {
     }, [handleFile]);
 
     const downloadFile = (file: ExtractedFile) => {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(file.blob);
-        a.download = file.name.split("/").pop() || file.name;
-        a.click();
+        saveFile(file.blob, file.name.split("/").pop() || file.name);
     };
 
     const downloadAll = async () => {
         const zip = new JSZip();
         files.forEach(f => zip.file(f.name, f.blob));
         const blob = await zip.generateAsync({ type: "blob" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = zipName.replace(".zip", "_extracted.zip");
-        a.click();
+        saveFile(blob, zipName.replace(/\.zip$/i, "_extracted.zip"));
     };
 
     const fmt = (b: number) => b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(1) + " KB" : (b / 1048576).toFixed(1) + " MB";
@@ -82,6 +81,7 @@ export default function ExtractZIPPage() {
                 <h1 className="text-lg font-semibold">Extract ZIP</h1>
             </div>
 
+            {error && <p role="alert" className="text-sm text-red-600 mb-4">{error}</p>}
             {files.length === 0 ? (
                 <div
                     className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}

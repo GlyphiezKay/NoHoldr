@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, FileText, Download, Hash } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Hash } from "lucide-react";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { downloadPdfBytes } from "@/lib/pdf-utils";
 
