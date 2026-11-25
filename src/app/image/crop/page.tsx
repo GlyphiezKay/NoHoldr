@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { ToolWorkspace } from "@/components/layout/tool-workspace";
+import { ToolFile } from "@/components/layout/tool-file";
+import { EmptyOutput, useToolExport } from "@/components/layout/tool-output";
+import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -12,7 +14,6 @@ import { encodeCanvas, makeImageCanvas, openLocalImage, uniqueImageName } from "
 interface ImageFile {
     id: string;
     file: File;
-    url: string;
 }
 
 interface CropBox {
@@ -42,6 +43,7 @@ const OUTPUT_FORMATS = [
 export default function CropImagePage() {
     const [mode, setMode] = useState<"manual" | "auto">("manual");
     const [file, setFile] = useState<File | null>(null);
+    const manualOutput = useToolExport(file);
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
     const [crop, setCrop] = useState<CropBox>({ x: 0, y: 0, w: 100, h: 100 });
@@ -50,7 +52,6 @@ export default function CropImagePage() {
     const [outputFormat, setOutputFormat] = useState("image/jpeg");
     const [quality, setQuality] = useState(92);
     const [error, setError] = useState("");
-    const previewUrls = useRef(new Set<string>());
 
     // Drag state
     const [dragging, setDragging] = useState<"move" | "nw" | "ne" | "sw" | "se" | null>(null);
@@ -59,6 +60,9 @@ export default function CropImagePage() {
 
     // Auto mode
     const [batchImages, setBatchImages] = useState<ImageFile[]>([]);
+    const [batchOutput, setBatchOutput] = useState<{ source: ImageFile[]; files: { blob: Blob; name: string }[] }>();
+    const results = mode === "manual" ? (manualOutput.file ? [manualOutput.file] : []) :
+        batchOutput?.source === batchImages ? batchOutput.files : [];
     const [autoAspectRatio, setAutoAspectRatio] = useState<number>(1);
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -91,11 +95,6 @@ export default function CropImagePage() {
         };
     }, [imageUrl]);
 
-    useEffect(() => {
-        const urls = previewUrls.current;
-        return () => urls.forEach(url => URL.revokeObjectURL(url));
-    }, []);
-
     // Get displayed image rect
     const getImageRect = () => {
         if (!imgRef.current) return { left: 0, top: 0, width: 0, height: 0 };
@@ -104,18 +103,12 @@ export default function CropImagePage() {
     };
 
     const addBatchImages = (files: File[]) => {
-        const added = files.map(file => {
-            const url = URL.createObjectURL(file);
-            previewUrls.current.add(url);
-            return { id: crypto.randomUUID(), file, url };
-        });
+        const added = files.map(file => ({ id: crypto.randomUUID(), file }));
         setError("");
         setBatchImages(previous => [...previous, ...added]);
     };
 
     const clearBatch = () => {
-        previewUrls.current.forEach(url => URL.revokeObjectURL(url));
-        previewUrls.current.clear();
         setBatchImages([]);
         setError("");
     };
@@ -250,7 +243,7 @@ export default function CropImagePage() {
                 context.rotate(rotation * Math.PI / 180);
                 context.drawImage(image, crop.x, crop.y, crop.w, crop.h, -crop.w / 2, -crop.h / 2, crop.w, crop.h);
                 const ext = OUTPUT_FORMATS.find(format => format.value === outputFormat)?.ext ?? "jpg";
-                downloadFile(await encodeCanvas(canvas, outputFormat, quality / 100), file.name.replace(/\.[^.]+$/, "") + "_cropped." + ext);
+                manualOutput.save(await encodeCanvas(canvas, outputFormat, quality / 100), file.name.replace(/\.[^.]+$/, "") + "_cropped." + ext);
             } finally {
                 canvas.width = canvas.height = 0;
             }
@@ -293,6 +286,7 @@ export default function CropImagePage() {
                 }
                 setProgress(Math.round((index + 1) / batchImages.length * 100));
             }
+            setBatchOutput({ source: batchImages, files: ready });
             if (ready.length) await downloadAsZip(ready, "cropped_images.zip");
             if (skipped.length) setError("Could not crop: " + skipped.join(", ") + ".");
         } catch {
@@ -338,7 +332,7 @@ export default function CropImagePage() {
                         <>
                             <div className="border rounded-xl p-4 mb-4">
                                 <div className="flex items-center justify-between mb-4">
-                                    <span className="text-sm font-medium">{file.name}</span>
+                                    <div className="min-w-0 flex-1"><ToolFile blob={file} name={file.name} /></div>
                                     <Button variant="ghost" size="sm" aria-label="Remove image" disabled={isProcessing} onClick={() => { setFile(null); setImageUrl(null); setError(""); }}>
                                         <X className="h-4 w-4" />
                                     </Button>
@@ -488,11 +482,8 @@ export default function CropImagePage() {
                                 <span className="text-sm font-medium">{batchImages.length} images</span>
                                 <Button variant="ghost" size="sm" disabled={isProcessing} onClick={clearBatch}>Clear</Button>
                             </div>
-                            <div className="grid grid-cols-6 gap-2 max-h-24 overflow-y-auto">
-                                {batchImages.map(img => (
-                                    // eslint-disable-next-line @next/next/no-img-element -- Local file previews stay in the browser.
-                                    <img key={img.id} src={img.url} alt="" className="w-full h-12 object-cover rounded-lg" />
-                                ))}
+                            <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
+                                {batchImages.map(img => <ToolFile key={img.id} blob={img.file} name={img.file.name} />)}
                             </div>
                         </div>
                     )}
@@ -527,6 +518,16 @@ export default function CropImagePage() {
                 </>
             )}
 
+            <div className="mt-4">
+                <ToolPanel stage="result" title="Results">
+                    {results.length ? <div className="grid gap-2">
+                        {results.map(result => <div key={result.name} className="flex items-center gap-2">
+                            <div className="min-w-0 flex-1"><ToolFile blob={result.blob} name={result.name} /></div>
+                            <Button variant="outline" size="icon" aria-label={"Download " + result.name} onClick={() => downloadFile(result.blob, result.name)}><Download /></Button>
+                        </div>)}
+                    </div> : <EmptyOutput />}
+                </ToolPanel>
+            </div>
             {error && <p role="alert" className="mt-4 text-sm text-destructive">{error}</p>}
           </div>
         </ToolWorkspace>

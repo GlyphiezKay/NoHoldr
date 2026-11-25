@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileText, Minimize2 } from "lucide-react";
+import { Download, Minimize2 } from "lucide-react";
+import { ToolFile } from "@/components/layout/tool-file";
+import { EmptyOutput, ViewToolResult } from "@/components/layout/tool-output";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
@@ -27,6 +29,8 @@ export default function CompressPDFPage() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ blob: Blob; pages: number; targetBytes?: number; mode: CompressionOptions["mode"] } | null>(null);
   const reduced = Boolean(file && result && result.blob.size < file.size);
+
+  const outputName = file && (reduced ? file.name.replace(/\.pdf$/i, "") + "_compressed.pdf" : file.name);
 
   function selectFile(files: File[]) {
     if (files.length !== 1) { setError("Choose one PDF at a time."); return; }
@@ -73,42 +77,13 @@ export default function CompressPDFPage() {
 
   return (
     <ToolWorkspace category="PDF tools" backHref="/pdf" title="Compress PDF" description="Reduce a PDF’s size for sharing or uploads, then compare the result with the original.">
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
-        <div className="space-y-5">
-          <ToolPanel title="Source PDF" action={file && <Button variant="ghost" size="sm" disabled={running} onClick={() => { setFile(null); setResult(null); setError(""); }}>Remove</Button>}>
-            {file && <div className="mb-4 flex items-center gap-3 rounded-lg border bg-background p-3">
-              <FileText className="size-5 shrink-0 text-primary" aria-hidden="true" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold" title={file.name}>{file.name}</p>
-                <p className="text-sm text-muted-foreground">{formatBytes(file.size)}</p>
-              </div>
-            </div>}
-            <FilePicker accept=".pdf,application/pdf" onFiles={selectFile} action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF up to 200 MB here." disabled={running} />
-          </ToolPanel>
+      <div className="studio-flow">
+        <ToolPanel stage="input" title="Source PDF" action={file && <Button variant="ghost" size="sm" disabled={running} onClick={() => { setFile(null); setResult(null); setError(""); }}>Remove</Button>}>
+          {file && <div className="mb-3"><ToolFile blob={file} name={file.name} /></div>}
+          <FilePicker accept=".pdf,application/pdf" onFiles={selectFile} action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF up to 200 MB here." disabled={running} />
+        </ToolPanel>
 
-          <ToolPanel title="Result" description={!result ? "Run compression to compare file sizes here." : undefined}>
-            {result && file && (
-              <>
-                <dl className="grid grid-cols-2 gap-2 rounded-lg border bg-background p-3">
-                  <div><dt className="text-sm text-muted-foreground">Original</dt><dd className="font-semibold">{formatBytes(file.size)}</dd></div>
-                  <div><dt className="text-sm text-muted-foreground">Best result</dt><dd className="font-semibold">{formatBytes(result.blob.size)}</dd></div>
-                </dl>
-                <p role="status" className="mt-3 text-sm text-muted-foreground">
-                  {reduced ? formatBytes(file.size - result.blob.size) + " saved" : "The original is the smallest copy found."} · {result.pages} {result.pages === 1 ? "page" : "pages"}
-                </p>
-                {result.targetBytes && <p className="mt-2 text-sm font-medium">
-                  {result.blob.size <= result.targetBytes ? "Target met" : "Target not reached"} · {formatBytes(result.targetBytes)}
-                  {result.blob.size !== result.targetBytes && " · " + formatBytes(Math.abs(result.blob.size - result.targetBytes)) + (result.blob.size < result.targetBytes ? " below target" : " above target")}
-                </p>}
-                {reduced && result.mode === "scan" && <p className="mt-2 text-sm text-muted-foreground">The compressed copy contains page images.</p>}
-                <Button className="mt-4 w-full" size="lg" onClick={() => downloadFile(result.blob, reduced ? file.name.replace(/\.pdf$/i, "") + "_compressed.pdf" : file.name)}>
-                  <Download /> {reduced ? "Download compressed PDF" : "Download original PDF"}
-                </Button>
-              </>
-            )}
-          </ToolPanel>
-        </div>
-        <ToolPanel title="Compression settings">
+        <ToolPanel stage="settings" title="Compression settings">
           <fieldset disabled={running} className="space-y-3">
             <legend className="mb-2 text-sm font-semibold">Compression method</legend>
             {modes.map(option => (
@@ -141,6 +116,31 @@ export default function CompressPDFPage() {
             <p role="status" className="mt-2 text-sm text-muted-foreground">{status}</p>
           </div>}
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+          {result && !running && <ViewToolResult />}
+        </ToolPanel>
+        <ToolPanel stage="result" title="Result">
+          {result && file && outputName ? (
+            <>
+              <div className="grid items-center gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto]">
+                <ToolFile blob={result.blob} name={outputName} detail={`${result.pages} ${result.pages === 1 ? "page" : "pages"}`} />
+                <dl className="grid grid-cols-2 gap-2 rounded-lg border bg-background p-3">
+                  <div><dt className="text-sm text-muted-foreground">Original</dt><dd className="font-semibold">{formatBytes(file.size)}</dd></div>
+                  <div><dt className="text-sm text-muted-foreground">Best result</dt><dd className="font-semibold">{formatBytes(result.blob.size)}</dd></div>
+                </dl>
+                <Button size="lg" className="w-full" onClick={() => downloadFile(result.blob, outputName)}>
+                  <Download /> {reduced ? "Download compressed PDF" : "Download original PDF"}
+                </Button>
+              </div>
+              <p role="status" className="mt-3 text-sm text-muted-foreground">
+                {reduced ? formatBytes(file.size - result.blob.size) + " saved" : "The original is the smallest copy found."}
+              </p>
+              {result.targetBytes && <p className="mt-2 text-sm font-medium">
+                {result.blob.size <= result.targetBytes ? "Target met" : "Target not reached"} · {formatBytes(result.targetBytes)}
+                {result.blob.size !== result.targetBytes && " · " + formatBytes(Math.abs(result.blob.size - result.targetBytes)) + (result.blob.size < result.targetBytes ? " below target" : " above target")}
+              </p>}
+              {reduced && result.mode === "scan" && <p className="mt-2 text-sm text-muted-foreground">The compressed copy contains page images.</p>}
+            </>
+          ) : <EmptyOutput>Run compression to compare file sizes here.</EmptyOutput>}
         </ToolPanel>
       </div>
     </ToolWorkspace>

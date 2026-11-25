@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Image as ImageIcon, X } from "lucide-react";
+import { Download, X } from "lucide-react";
+import { EmptyOutput, ViewToolResult } from "@/components/layout/tool-output";
+import { ToolFile } from "@/components/layout/tool-file";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
@@ -166,8 +168,8 @@ export default function ResizeImagePage() {
 
   return (
     <ToolWorkspace category="Image tools" backHref="/image" title="Resize Images" description="Resize one image or a batch and choose how the new dimensions are applied.">
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
-        <ToolPanel title="Images" description="Add images to compare their original and target sizes."
+      <div className="studio-flow">
+        <ToolPanel stage="input" title="Source images" description="Add images to compare their original and target sizes."
           action={images.length > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setImages([]); setOutputs({}); setError(""); }}>Clear list</Button>}>
           <FilePicker multiple accept="image/*" action={images.length ? "Add images" : "Choose images"}
             hint="Or drop one or more images here." disabled={busy} onFiles={addImages} />
@@ -176,16 +178,11 @@ export default function ResizeImagePage() {
             <ul className="mt-4 space-y-2">
               {images.map(image => {
                 const preview = target(image);
-                const output = outputs[image.id];
                 return (
-                  <li key={image.id} className="flex items-center gap-2 rounded-lg border bg-background p-2 sm:p-3">
-                    <ImageIcon aria-hidden="true" className="hidden size-5 shrink-0 text-primary sm:block" />
+                  <li key={image.id} className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold" title={image.file.name}>{image.file.name}</p>
-                      <p className="text-sm text-muted-foreground">{image.width} × {image.height}{preview && <> → {preview.width} × {preview.height}</>} px</p>
-                      {output && <p className="text-sm text-muted-foreground">Last output: {output.width} × {output.height} px</p>}
+                      <ToolFile blob={image.file} name={image.file.name} detail={`${image.width} × ${image.height} px${preview ? ` → ${preview.width} × ${preview.height} px` : ""}`} />
                     </div>
-                    {output && <Button variant="outline" size="icon" aria-label={"Download " + output.name} disabled={busy} onClick={() => downloadFile(output.blob, output.name)}><Download /></Button>}
                     <Button variant="ghost" size="icon" aria-label={"Remove " + image.file.name} disabled={busy} onClick={() => removeImage(image.id)}><X /></Button>
                   </li>
                 );
@@ -194,7 +191,7 @@ export default function ResizeImagePage() {
           )}
         </ToolPanel>
 
-        <ToolPanel title="Resize settings">
+        <ToolPanel stage="settings" title="Resize settings">
           <fieldset disabled={busy} className="space-y-4">
             <legend className="mb-2 text-sm font-medium">Sizing mode</legend>
             <div className="grid grid-cols-3 gap-1 rounded-lg bg-accent p-1">
@@ -233,9 +230,19 @@ export default function ResizeImagePage() {
           <Button size="lg" className="mt-5 w-full" disabled={busy || !images.length} onClick={runResize}>
             {status === "resizing" ? "Resizing…" : "Resize images"}
           </Button>
-          {results.length > 1 && <Button variant="outline" className="mt-2 w-full" disabled={busy} onClick={downloadZip}><Download /> {status === "zip" ? "Preparing ZIP…" : "Download ZIP"}</Button>}
+
           {status === "resizing" && <Progress aria-label="Resize progress" className="mt-4" value={progress} />}
           {error && <p role="alert" className="mt-3 wrap-anywhere text-sm text-destructive">{error}</p>}
+          {results.length > 0 && !busy && <ViewToolResult />}
+        </ToolPanel>
+        <ToolPanel stage="result" title="Results">
+          {results.length ? <ul className="grid gap-2 lg:grid-cols-2">
+            {results.map(output => <li key={output.name} className="flex min-w-0 items-center gap-2">
+              <div className="min-w-0 flex-1"><ToolFile blob={output.blob} name={output.name} detail={`${output.width} × ${output.height} px`} /></div>
+              <Button variant="outline" size="icon" aria-label={"Download " + output.name} disabled={busy} onClick={() => downloadFile(output.blob, output.name)}><Download /></Button>
+            </li>)}
+          </ul> : <EmptyOutput />}
+          {results.length > 1 && <Button variant="outline" className="mt-3" disabled={busy} onClick={downloadZip}><Download /> {status === "zip" ? "Preparing ZIP…" : "Download ZIP"}</Button>}
         </ToolPanel>
       </div>
     </ToolWorkspace>

@@ -1,5 +1,7 @@
 "use client";
 
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolOutput, useToolExport } from "@/components/layout/tool-output";
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
@@ -7,7 +9,6 @@ import { FilePicker } from "@/components/ui/file-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { downloadFile } from "@/lib/download-manager";
 import { encodeCanvas, makeImageCanvas } from "@/lib/image-processing";
 
 const elements = new Set("article aside blockquote br div em figcaption figure h1 h2 h3 h4 hr i img li ol p pre s section small span strong table tbody td th thead tr u ul".split(" "));
@@ -59,7 +60,9 @@ function imageMarkup(html: string) {
 }
 
 export default function HtmlToImage() {
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [html, setHtml] = useState("");
+  const output = useToolExport(html);
   const [width, setWidth] = useState("1024");
   const [height, setHeight] = useState("768");
   const [format, setFormat] = useState("png");
@@ -74,7 +77,7 @@ export default function HtmlToImage() {
     }
     setError("");
     setStatus("");
-    try { setHtml(await files[0].text()); }
+    try { setHtml(await files[0].text()); setSourceFile(files[0]); }
     catch { setError("Could not read the HTML source."); }
   }
 
@@ -99,7 +102,7 @@ export default function HtmlToImage() {
         context.drawImage(image, 0, 0, w, h);
         if (context.getImageData(0, 0, 1, 1).data[3] === 0) throw new Error("This browser could not render the HTML. Try desktop Chrome.");
         const png = await encodeCanvas(canvas, "image/" + format, 0.92);
-        downloadFile(png, "noholdr_html." + (format === "jpeg" ? "jpg" : "png"));
+        output.save(png, "noholdr_html." + (format === "jpeg" ? "jpg" : "png"));
         setStatus("Download ready.");
       } finally {
         canvas.width = canvas.height = 0;
@@ -114,12 +117,13 @@ export default function HtmlToImage() {
   return (
     <ToolWorkspace category="Image tools" backHref="/image" title="HTML to Image" description="Render local HTML or pasted markup into a PNG or JPEG using basic markup and inline styles.">
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        <ToolPanel title="HTML source" description="Embed images using base64 PNG, JPEG, WebP, or GIF. External files, scripts, and stylesheets are skipped.">
+        <ToolPanel stage="input" title="HTML source" description="Embed images using base64 PNG, JPEG, WebP, or GIF. External files, scripts, and stylesheets are skipped.">
+          {sourceFile && <div className="mb-3"><ToolFile blob={sourceFile} name={sourceFile.name} /></div>}
           <FilePicker accept=".html,.htm,text/html" action="Choose HTML file" hint="Or paste markup below." disabled={busy} onFiles={load} />
           <Textarea aria-label="HTML markup" placeholder="<h1>Your headline</h1>" className="mt-3 min-h-56 font-mono" value={html}
-            maxLength={2 * 1024 * 1024} disabled={busy} onChange={event => setHtml(event.target.value)} />
+            maxLength={2 * 1024 * 1024} disabled={busy} onChange={event => { setHtml(event.target.value); setSourceFile(null); }} />
         </ToolPanel>
-        <ToolPanel title="Image settings">
+        <ToolPanel stage="settings" title="Image settings">
           <fieldset className="space-y-3" disabled={busy}>
             <div className="grid grid-cols-2 gap-3">
               <label className="text-sm font-medium">Width (px)<Input className="mt-1" type="number" min="100" max="4096" value={width} onChange={event => setWidth(event.target.value)} /></label>
@@ -133,6 +137,7 @@ export default function HtmlToImage() {
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
           {status && <p role="status" className="mt-3 text-sm text-muted-foreground">{status}</p>}
         </ToolPanel>
+        <ToolOutput file={output.file} />
       </div>
     </ToolWorkspace>
   );

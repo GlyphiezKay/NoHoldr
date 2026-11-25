@@ -1,11 +1,12 @@
 "use client";
 
+import { ToolFile } from "@/components/layout/tool-file";
 import { useState } from "react";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { downloadFile, formatBytes } from "@/lib/download-manager";
+import { downloadFile } from "@/lib/download-manager";
 import { openLocalImage } from "@/lib/image-processing";
 
 type Result = { file: File; width: number; height: number; metadata: Record<string, unknown>; metadataError: boolean };
@@ -49,17 +50,13 @@ export default function ImageMetadataPage() {
   return (
     <ToolWorkspace category="Image tools" backHref="/image" title="View Image Metadata" description="Inspect image dimensions and available EXIF, GPS, XMP, and IPTC tags.">
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.65fr)]">
-        <ToolPanel title="Source image">
-          {result && <dl className="mb-3 space-y-1 rounded border bg-background p-3 text-sm">
-            <div className="break-all font-semibold">{result.file.name}</div>
-            <div><dt className="inline">Dimensions · </dt><dd className="inline">{result.width} × {result.height} px</dd></div>
-            <div><dt className="inline">File size · </dt><dd className="inline">{formatBytes(result.file.size)}</dd></div>
-          </dl>}
+        <ToolPanel stage="input" title="Source image">
+          {result && <div className="mb-3"><ToolFile blob={result.file} name={result.file.name} /></div>}
           <FilePicker accept="image/*" action={result ? "Replace image" : "Choose image"} hint="Or drop an image here." disabled={busy} onFiles={read} />
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
           {busy && <p role="status" className="mt-3 text-sm text-muted-foreground">Reading image metadata…</p>}
         </ToolPanel>
-        <ToolPanel title="Metadata tags">
+        <ToolPanel stage="result" title="Metadata tags">
           {!result && <p className="text-sm text-muted-foreground">Choose an image to inspect its tags.</p>}
           {result?.metadataError && <p className="text-sm text-muted-foreground">The metadata block could not be read for this format or file.</p>}
           {result && !result.metadataError && !tags.length && <p role="status" className="text-sm text-muted-foreground">No supported metadata tags found.</p>}

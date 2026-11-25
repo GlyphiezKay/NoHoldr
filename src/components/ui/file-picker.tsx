@@ -17,7 +17,8 @@ export function FilePicker({ onFiles, accept, multiple, disabled, action, hint }
 
   return (
     <div
-      className={`rounded-xl border-2 border-dashed px-3 py-7 text-center transition-colors motion-reduce:transition-none ${dragging ? "border-primary bg-accent" : "border-border bg-background/75"}`}
+      data-dragging={dragging}
+      className={`studio-dropzone border-2 border-dashed transition-colors motion-reduce:transition-none ${dragging ? "border-primary" : "border-border"}`}
       onDragOver={event => {
         event.preventDefault();
         event.dataTransfer.dropEffect = disabled ? "none" : "copy";
@@ -46,11 +47,8 @@ export function FilePicker({ onFiles, accept, multiple, disabled, action, hint }
           if (files.length) onFiles(files);
         }}
       />
-      <span className="mx-auto mb-3 grid size-11 place-items-center rounded-xl bg-accent text-primary">
-        <Upload className="size-5" aria-hidden="true" />
-      </span>
-      <Button type="button" disabled={disabled} onClick={() => input.current?.click()}>{action}</Button>
-      <p className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground">{hint}</p>
+      <Button type="button" disabled={disabled} onClick={() => input.current?.click()}><Upload size={17} aria-hidden="true" />{action}</Button>
+      <p className="max-w-xs text-sm text-muted-foreground">{hint}</p>
     </div>
   );
 }

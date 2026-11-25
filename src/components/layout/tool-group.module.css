@@ -1,0 +1,46 @@
+.tint {
+  background-color: var(--group-background);
+  color: var(--group-foreground);
+}
+
+[data-tone="rose"] > .tint,
+[data-tone="rose"] li .tint {
+  --group-background: #ffe8e2;
+  --group-foreground: #853d32;
+}
+
+[data-tone="green"] > .tint,
+[data-tone="green"] li .tint {
+  --group-background: #e6f4df;
+  --group-foreground: #34552d;
+}
+
+[data-tone="blue"] > .tint,
+[data-tone="blue"] li .tint {
+  --group-background: #e8edff;
+  --group-foreground: #343f82;
+}
+
+[data-tone="sky"] > .tint,
+[data-tone="sky"] li .tint {
+  --group-background: #dff2fa;
+  --group-foreground: #23556e;
+}
+
+[data-tone="purple"] > .tint,
+[data-tone="purple"] li .tint {
+  --group-background: #eee6ff;
+  --group-foreground: #503577;
+}
+
+[data-tone="amber"] > .tint,
+[data-tone="amber"] li .tint {
+  --group-background: #fff0d7;
+  --group-foreground: #73501e;
+}
+
+[data-tone="teal"] > .tint,
+[data-tone="teal"] li .tint {
+  --group-background: #def2ec;
+  --group-foreground: #23574a;
+}

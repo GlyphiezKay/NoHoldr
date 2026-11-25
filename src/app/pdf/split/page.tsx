@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import Link from "next/link";
+import { PdfPagePicker } from "@/components/pdf/pdf-page-picker";
+import { useState } from "react";
+import { FilePicker } from "@/components/ui/file-picker";
+import { ToolWorkspace, ToolPanel } from "@/components/layout/tool-workspace";
+import { EmptyOutput } from "@/components/layout/tool-output";
+import { ToolFile } from "@/components/layout/tool-file";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, FileText, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { PDFDocument } from "pdf-lib";
+import { parsePdfPages } from "@/lib/pdf-pages";
 import { downloadFile } from "@/lib/download-manager";
 
 type Mode = "range" | "extract" | "every";
@@ -19,7 +24,6 @@ interface SplitResult {
 export default function SplitPDFPage() {
     const [file, setFile] = useState<File | null>(null);
     const [pageCount, setPageCount] = useState(0);
-    const [isDragging, setIsDragging] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [status, setStatus] = useState("");
@@ -29,43 +33,21 @@ export default function SplitPDFPage() {
     const [everyN, setEveryN] = useState("5");
     const [splitResults, setSplitResults] = useState<SplitResult[]>([]);
 
-    const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
-    const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
 
     const loadPdf = async (f: File) => {
         try {
             const pdf = await PDFDocument.load(await f.arrayBuffer());
             setFile(f);
+            setSplitResults([]);
             setPageCount(pdf.getPageCount());
+            setRangeInput("");
+            setExtractInput("");
         } catch { /* ignore */ }
     };
 
-    const handleDrop = async (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        const f = Array.from(e.dataTransfer.files).find(f => f.type === "application/pdf");
-        if (f) await loadPdf(f);
-    };
-
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) await loadPdf(e.target.files[0]);
-    };
-
-    const parseRanges = (input: string): number[][] => {
-        const ranges: number[][] = [];
-        for (const part of input.split(",").map(p => p.trim()).filter(Boolean)) {
-            if (part.includes("-")) {
-                const [a, b] = part.split("-").map(n => parseInt(n.trim(), 10));
-                if (!isNaN(a) && !isNaN(b) && a >= 1 && b <= pageCount && a <= b) {
-                    ranges.push(Array.from({ length: b - a + 1 }, (_, i) => a - 1 + i));
-                }
-            } else {
-                const p = parseInt(part, 10);
-                if (!isNaN(p) && p >= 1 && p <= pageCount) ranges.push([p - 1]);
-            }
-        }
-        return ranges;
-    };
+    const parseRanges = (input: string) => input.trim()
+        ? input.split(",").map(segment => parsePdfPages(segment, pageCount).map(page => page - 1))
+        : [];
 
     const handleSplit = async () => {
         if (!file) return;
@@ -90,7 +72,7 @@ export default function SplitPDFPage() {
                     results.push({ name: `${base}_part${i + 1}.pdf`, blob: new Blob([new Uint8Array(pdfBytes).buffer as ArrayBuffer], { type: "application/pdf" }) });
                 }
             } else if (mode === "extract") {
-                const nums = extractInput.split(",").map(p => parseInt(p.trim(), 10) - 1).filter(p => p >= 0 && p < pageCount);
+                const nums = parseRanges(extractInput).flat();
                 if (nums.length === 0) { setStatus("Invalid pages"); setIsProcessing(false); return; }
                 setProgress(50);
                 const doc = await PDFDocument.create();
@@ -117,118 +99,103 @@ export default function SplitPDFPage() {
             setProgress(100);
             setStatus("Done!");
             setTimeout(() => { setIsProcessing(false); setProgress(0); setStatus(""); }, 1000);
-        } catch {
-            setStatus("Error");
+        } catch (error) {
+            setStatus(error instanceof Error ? error.message : "Could not split this PDF.");
             setIsProcessing(false);
         }
     };
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            {/* Header */}
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/pdf"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Split PDF</h1>
-            </div>
+        <ToolWorkspace category="PDF tools" backHref="/pdf" title="Split PDF" description="Export a page range or split a PDF into several files.">
+            <div className="mx-auto max-w-3xl space-y-4">
+                {file && <ToolPanel stage="input" title="Source PDF" action={<Button variant="ghost" size="sm" disabled={isProcessing} onClick={() => { setFile(null); setSplitResults([]); }}>Change</Button>}><ToolFile blob={file} name={file.name} detail={pageCount + " pages"} /></ToolPanel>}
+                {!file ? (
+                    <ToolPanel stage="input" title="Source PDF">
+                        <FilePicker accept=".pdf,application/pdf" action="Choose PDF" hint="Or drop a PDF here."
+                            onFiles={files => { if (files.length === 1) void loadPdf(files[0]); }} />
+                    </ToolPanel>
+                ) : (
+                    <>
+                        {/* File Info */}
 
-            {!file ? (
-                <div
-                    className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onClick={() => document.getElementById("pdf-input")?.click()}
-                >
-                    <input type="file" accept="application/pdf" onChange={handleFileSelect} className="hidden" id="pdf-input" />
-                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm"><span className="font-medium">Drop PDF</span> <span className="text-muted-foreground">or tap</span></p>
-                </div>
-            ) : (
-                <>
-                    {/* File Info */}
-                    <div className="flex items-center gap-3 p-3 border rounded-xl mb-4">
-                        <FileText className="h-5 w-5 text-red-500" />
-                        <div className="flex-1"><p className="text-sm font-medium">{file.name}</p><p className="text-xs text-muted-foreground">{pageCount} pages</p></div>
-                        <Button variant="ghost" size="sm" onClick={() => setFile(null)}>Change</Button>
-                    </div>
 
-                    {/* Mode Tabs */}
-                    <div className="flex gap-1 p-1 bg-muted rounded-lg mb-4">
-                        {(["range", "extract", "every"] as Mode[]).map(m => (
-                            <button
-                                key={m}
-                                onClick={() => setMode(m)}
-                                className={`flex-1 py-2 px-3 text-sm rounded-md transition-colors ${mode === m ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
-                            >
-                                {m === "range" ? "Ranges" : m === "extract" ? "Extract" : "Every N"}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Mode Content */}
-                    <div className="border rounded-xl p-4 mb-4">
-                        {mode === "range" && (
-                            <div>
-                                <label className="text-sm font-medium">Page ranges</label>
-                                <Input placeholder="1-5, 10-15" value={rangeInput} onChange={e => setRangeInput(e.target.value)} className="mt-1" />
-                                <p className="text-xs text-muted-foreground mt-1">Each range → separate PDF</p>
-                            </div>
-                        )}
-                        {mode === "extract" && (
-                            <div>
-                                <label className="text-sm font-medium">Pages to extract</label>
-                                <Input placeholder="1, 3, 5, 7" value={extractInput} onChange={e => setExtractInput(e.target.value)} className="mt-1" />
-                                <p className="text-xs text-muted-foreground mt-1">Combined into one PDF</p>
-                            </div>
-                        )}
-                        {mode === "every" && (
-                            <div>
-                                <label className="text-sm font-medium">Split every N pages</label>
-                                <Input type="number" min="1" value={everyN} onChange={e => setEveryN(e.target.value)} className="mt-1 w-24" />
-                                <p className="text-xs text-muted-foreground mt-1">{Math.ceil(pageCount / (parseInt(everyN) || 1))} files</p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Progress */}
-                    {isProcessing && (
-                        <div className="border rounded-xl p-4 mb-4">
-                            <div className="flex justify-between text-sm mb-2"><span>{status}</span><span>{progress}%</span></div>
-                            <Progress value={progress} className="h-1.5" />
-                        </div>
-                    )}
-
-                    {/* Action */}
-                    {splitResults.length === 0 ? (
-                        <Button onClick={handleSplit} disabled={isProcessing} className="w-full h-11">
-                            <Download className="h-4 w-4 mr-2" />Split PDF
-                        </Button>
-                    ) : (
-                        <div className="space-y-2">
-                            {splitResults.length > 1 && (
-                                <Button onClick={async () => {
-                                    const { downloadAsZip } = await import("@/lib/download-manager");
-                                    await downloadAsZip(splitResults, `${file.name.replace(".pdf", "")}_split.zip`);
-                                }} className="w-full h-11">
-                                    <Download className="h-4 w-4 mr-2" />Download as ZIP ({splitResults.length} files)
-                                </Button>
-                            )}
-                            {splitResults.map((item, i) => (
-                                <Button key={i} onClick={() => downloadFile(item.blob, item.name)} variant="outline" className="w-full justify-between">
-                                    <span className="flex items-center"><Download className="h-4 w-4 mr-2" />{item.name}</span>
-                                </Button>
+                        {/* Mode Tabs */}
+                        <div className="flex gap-1 p-1 bg-muted rounded-lg mb-4">
+                            {(["range", "extract", "every"] as Mode[]).map(m => (
+                                <button
+                                    key={m}
+                                    onClick={() => setMode(m)}
+                                    className={`flex-1 py-2 px-3 text-sm rounded-md transition-colors ${mode === m ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
+                                >
+                                    {m === "range" ? "Ranges" : m === "extract" ? "Extract" : "Every N"}
+                                </button>
                             ))}
-                            <Button variant="ghost" onClick={() => { setSplitResults([]); }} className="w-full">
-                                Split Again
-                            </Button>
                         </div>
-                    )}
-                </>
-            )}
 
-            <p className="text-xs text-muted-foreground text-center mt-4">Processed locally • Never uploaded</p>
-        </div>
+                        {/* Mode Content */}
+                        <div className="border rounded-xl p-4 mb-4">
+                            {mode === "range" && (
+                                <div>
+                                    <PdfPagePicker file={file} total={pageCount} value={rangeInput} onChange={setRangeInput}
+                                        label="Page ranges" kind="ranges" disabled={isProcessing} />
+                                    <p className="text-xs text-muted-foreground mt-1">Each range → separate PDF</p>
+                                </div>
+                            )}
+                            {mode === "extract" && (
+                                <div>
+                                    <PdfPagePicker file={file} total={pageCount} value={extractInput} onChange={setExtractInput}
+                                        label="Pages to extract" disabled={isProcessing} />
+                                    <p className="text-xs text-muted-foreground mt-1">Combined into one PDF</p>
+                                </div>
+                            )}
+                            {mode === "every" && (
+                                <div>
+                                    <label className="text-sm font-medium">Split every N pages</label>
+                                    <Input type="number" min="1" value={everyN} onChange={e => setEveryN(e.target.value)} className="mt-1 w-24" />
+                                    <p className="text-xs text-muted-foreground mt-1">{Math.ceil(pageCount / (parseInt(everyN) || 1))} files</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Progress */}
+                        {isProcessing && (
+                            <div className="border rounded-xl p-4 mb-4">
+                                <div className="flex justify-between text-sm mb-2"><span>{status}</span><span>{progress}%</span></div>
+                                <Progress value={progress} className="h-1.5" />
+                            </div>
+                        )}
+
+                        {/* Action */}
+                        {splitResults.length === 0 ? (
+                            <Button onClick={handleSplit} disabled={isProcessing} className="w-full h-11">
+                                <Download className="h-4 w-4 mr-2" />Split PDF
+                            </Button>
+                        ) : (
+                            <ToolPanel stage="result" title="Results">
+                                {splitResults.length > 1 && (
+                                    <Button onClick={async () => {
+                                        const { downloadAsZip } = await import("@/lib/download-manager");
+                                        await downloadAsZip(splitResults, `${file.name.replace(".pdf", "")}_split.zip`);
+                                    }} className="w-full h-11">
+                                        <Download className="h-4 w-4 mr-2" />Download as ZIP ({splitResults.length} files)
+                                    </Button>
+                                )}
+                                {splitResults.map((item, i) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                        <div className="min-w-0 flex-1"><ToolFile blob={item.blob} name={item.name} /></div>
+                                        <Button size="icon" variant="outline" aria-label={"Download " + item.name} onClick={() => downloadFile(item.blob, item.name)}><Download /></Button>
+                                    </div>
+                                ))}
+                                <Button variant="ghost" onClick={() => { setSplitResults([]); }} className="w-full">
+                                    Split Again
+                                </Button>
+                            </ToolPanel>
+                        )}
+                    </>
+                )}
+
+                {!splitResults.length && <ToolPanel stage="result" title="Results"><EmptyOutput /></ToolPanel>}
+            </div>
+        </ToolWorkspace>
     );
 }

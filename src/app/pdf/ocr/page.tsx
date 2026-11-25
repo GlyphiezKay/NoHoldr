@@ -1,12 +1,14 @@
 "use client";
 
+import { EmptyOutput } from "@/components/layout/tool-output";
+import { ToolFile } from "@/components/layout/tool-file";
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Progress } from "@/components/ui/progress";
-import { downloadFile, formatBytes } from "@/lib/download-manager";
+import { downloadFile } from "@/lib/download-manager";
 import { recognizePdf } from "@/lib/pdf-ocr";
 
 export default function OcrPdfPage() {
@@ -40,8 +42,9 @@ export default function OcrPdfPage() {
   return (
     <ToolWorkspace category="PDF tools" backHref="/pdf" title="OCR PDF" description="Add searchable text to scanned PDF pages using English, Indonesian, or both.">
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        <ToolPanel title="Source PDF">
-          {file && <p className="mb-3 break-all rounded-lg border bg-background p-3 text-sm">{file.name} · {formatBytes(file.size)}</p>}
+        <ToolPanel stage="input" title="Source PDF">
+
+          {file && <div className="mb-3"><ToolFile blob={file} name={file.name} /></div>}
           <FilePicker accept=".pdf,application/pdf" action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF here." disabled={busy} onFiles={files => {
             if (files.length !== 1) { setError("Choose one PDF."); return; }
             setFile(files[0]);
@@ -49,7 +52,7 @@ export default function OcrPdfPage() {
             setError("");
           }} />
         </ToolPanel>
-        <ToolPanel title="Recognition settings" description="Pages that already contain selectable text are kept. Review the result if the scan is blurry or handwritten.">
+        <ToolPanel stage="settings" title="Recognition settings" description="Pages that already contain selectable text are kept. Review the result if the scan is blurry or handwritten.">
           <label className="block text-sm font-medium">Document language
             <select className="mt-2 h-10 w-full rounded-md border bg-background px-3" value={language} disabled={busy} onChange={event => setLanguage(event.target.value as typeof language)}>
               <option value="eng+ind">English and Indonesian</option><option value="eng">English</option><option value="ind">Indonesian</option>
@@ -58,13 +61,18 @@ export default function OcrPdfPage() {
           <Button size="lg" className="mt-4 w-full" disabled={!file || busy} onClick={run}>Recognize text</Button>
           {busy && <div className="mt-4"><Progress value={progress} aria-label="OCR progress" /><p role="status" className="mt-2 text-sm text-muted-foreground">{status}</p></div>}
           {error && <p role="alert" className="mt-4 text-sm text-destructive">{error}</p>}
+
+        </ToolPanel>
+        <ToolPanel stage="result" title="Result">
           {result && file && <div className="mt-4 space-y-3 rounded-lg border bg-background p-4">
             <p role="status" className="text-sm">{result.words ? "Added searchable text to " + result.recognizedPages + " page(s)." : "No new text layer was added."}</p>
+            {result.words > 0 && <ToolFile blob={result.blob} name={file.name.replace(/\.pdf$/i, "") + "_searchable.pdf"} />}
             <div className="flex flex-wrap gap-2">
               {result.words > 0 && <Button variant="outline" onClick={() => downloadFile(result.blob, file.name.replace(/\.pdf$/i, "") + "_searchable.pdf")}><Download />Searchable PDF</Button>}
               {result.transcript.trim() && <Button variant="outline" onClick={() => downloadFile(new Blob([result.transcript], { type: "text/plain;charset=utf-8" }), file.name.replace(/\.pdf$/i, "") + "_text.txt")}><Download />Text file</Button>}
             </div>
           </div>}
+          {!result && <EmptyOutput />}
         </ToolPanel>
       </div>
     </ToolWorkspace>

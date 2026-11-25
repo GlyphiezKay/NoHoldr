@@ -1,5 +1,8 @@
 "use client";
 
+import { PdfPagePicker } from "@/components/pdf/pdf-page-picker";
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolOutput, useToolExport } from "@/components/layout/tool-output";
 import { useState, type PointerEvent } from "react";
 import Image from "next/image";
 import { Trash2 } from "lucide-react";
@@ -7,7 +10,6 @@ import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FilePicker } from "@/components/ui/file-picker";
-import { downloadFile } from "@/lib/download-manager";
 import { cropPdf, redactPdf, type Redaction, type Region } from "@/lib/pdf-pages";
 import { openPdf, renderPdfCanvas } from "@/lib/pdf-render";
 
@@ -53,6 +55,7 @@ export function PdfRegionTool({ operation }: { operation: "crop" | "redact" }) {
   const redact = operation === "redact";
   const title = redact ? "Redact PDF" : "Crop PDF";
   const [file, setFile] = useState<File | null>(null);
+  const exported = useToolExport(file);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [page, setPage] = useState("1");
   const [selection, setSelection] = useState("1");
@@ -103,7 +106,7 @@ export function PdfRegionTool({ operation }: { operation: "crop" | "redact" }) {
       const output = redact
         ? await redactPdf(file, queued, (n, total) => setStatus("Rendering page " + n + " of " + total + "…"))
         : await cropPdf(file, selection, region);
-      downloadFile(output, file.name.replace(/\.pdf$/i, "") + (redact ? "_redacted.pdf" : "_cropped.pdf"));
+      exported.save(output, file.name.replace(/\.pdf$/i, "") + (redact ? "_redacted.pdf" : "_cropped.pdf"));
       setStatus("Download ready.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not export the PDF.");
@@ -117,15 +120,15 @@ export function PdfRegionTool({ operation }: { operation: "crop" | "redact" }) {
     <ToolWorkspace category="PDF tools" backHref="/pdf" title={title}
       description={redact ? "Cover sensitive page regions and export a new flattened PDF." : "Choose the portion of the page to keep and apply it to selected pages."}>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <ToolPanel title="Page preview" description={preview ? "Drag a rectangle or adjust the exact percentages in the settings." : undefined}>
+        <ToolPanel stage="input" title="Page preview" description={preview ? "Drag a rectangle or adjust the exact percentages in the settings." : undefined}>
+          {file && <div className="mb-3"><ToolFile blob={file} name={file.name} /></div>}
           <FilePicker accept=".pdf,application/pdf" action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF here." disabled={busy}
             onFiles={files => { if (files.length === 1) void load(files[0], 1, true); else setError("Choose one PDF."); }} />
           {preview && file && <div className="mt-4 space-y-4">
-            <form className="flex items-end gap-2" onSubmit={event => { event.preventDefault(); void load(file, Number(page), false); }}>
-              <label className="text-sm font-medium">Preview page (of {preview.count})
-                <Input className="mt-2" type="number" min="1" max={preview.count} value={page} disabled={busy} onChange={event => setPage(event.target.value)} />
-              </label>
-              <Button type="submit" variant="outline" disabled={busy}>Show page</Button>
+            <form onSubmit={event => { event.preventDefault(); void load(file, Number(page), false); }}>
+              <PdfPagePicker file={file} total={preview.count} value={page} onChange={setPage} label="Preview page"
+                kind="single" disabled={busy} onPageClick={number => void load(file, number, false)} />
+              <Button className="mt-2" type="submit" variant="outline" disabled={busy}>Show page</Button>
             </form>
             <div className="relative mx-auto w-full max-w-lg touch-none overflow-hidden border bg-white"
               onPointerDown={event => {
@@ -146,7 +149,7 @@ export function PdfRegionTool({ operation }: { operation: "crop" | "redact" }) {
             </div>
           </div>}
         </ToolPanel>
-        <ToolPanel title={redact ? "Redaction areas" : "Crop settings"}>
+        <ToolPanel stage="settings" title={redact ? "Redaction areas" : "Crop settings"}>
           <fieldset disabled={!preview || busy} className="space-y-4">
             <legend className="mb-2 text-sm font-medium">{redact ? "Area to cover (%)" : "Area to retain (%)"}</legend>
             <div className="grid grid-cols-2 gap-3">
@@ -156,9 +159,8 @@ export function PdfRegionTool({ operation }: { operation: "crop" | "redact" }) {
             </div>
             {preview && !valid && <p className="text-sm text-destructive">Enter a non-empty rectangle within the page.</p>}
             {redact ? <Button variant="outline" disabled={!valid} onClick={queue}>Add area on page {preview?.page ?? 1}</Button> :
-              <label className="block text-sm font-medium">Pages to crop
-                <Input className="mt-2" placeholder="1, 3-5" value={selection} onChange={event => setSelection(event.target.value)} />
-              </label>}
+              <PdfPagePicker file={file} total={preview?.count ?? 0} value={selection} onChange={setSelection}
+                label="Pages to crop" ordered={false} disabled={busy} />}
           </fieldset>
           {queued.length > 0 && <ul className="mt-4 space-y-2">
             {queued.map((item, index) => <li key={index} className="flex items-center justify-between rounded-lg border bg-background p-2 pl-3 text-sm">
@@ -176,6 +178,7 @@ export function PdfRegionTool({ operation }: { operation: "crop" | "redact" }) {
           {status && <p role="status" className="mt-3 text-sm text-muted-foreground">{status}</p>}
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
         </ToolPanel>
+        <ToolOutput file={exported.file} />
       </div>
     </ToolWorkspace>
   );

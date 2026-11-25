@@ -1,5 +1,7 @@
 "use client";
 
+import { EmptyOutput } from "@/components/layout/tool-output";
+import { ToolFile } from "@/components/layout/tool-file";
 import { useState } from "react";
 import Link from "next/link";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
@@ -93,15 +95,16 @@ export function PdfTextTool({ translate }: { translate?: boolean }) {
     <ToolWorkspace category="PDF tools" backHref="/pdf" title={translate ? "Translate PDF text" : "Summarize PDF"}
       description={translate ? "Translate selectable text into a plain-text file using your browser’s on-device translation model." : "Select key sentences from a PDF using an extractive summary that runs on your device."}>
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        <ToolPanel title="Source PDF">
-          {file && <p className="mb-3 break-all rounded-lg border bg-background p-3 text-sm">{file.name}</p>}
+        <ToolPanel stage="input" title="Source PDF">
+
+          {file && <div className="mb-3"><ToolFile blob={file} name={file.name} /></div>}
           <FilePicker accept=".pdf,application/pdf" action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF here." disabled={busy} onFiles={files => {
             if (files.length !== 1) { setError("Choose one PDF."); return; }
             setFile(files[0]); setError(""); setResult(""); setStatus("");
           }} />
           <p className="mt-3 text-sm text-muted-foreground">For scanned documents, start with <Link href="/pdf/ocr" className="underline">OCR PDF</Link>.</p>
         </ToolPanel>
-        <ToolPanel title={translate ? "Languages" : "Summary options"} description={translate ? "A supported desktop browser may need to download the language model. Document text stays on your device." : "The summary quotes selected sentences from the source."}>
+        <ToolPanel stage="settings" title={translate ? "Languages" : "Summary options"} description={translate ? "A supported desktop browser may need to download the language model. Document text stays on your device." : "The summary quotes selected sentences from the source."}>
           {translate ? <div className="grid grid-cols-2 gap-3">
             {[
               { label: "From", value: sourceLanguage, setter: setSourceLanguage },
@@ -119,10 +122,14 @@ export function PdfTextTool({ translate }: { translate?: boolean }) {
           <Button className="mt-4 w-full" disabled={!file || busy} onClick={run}>{translate ? "Translate text" : "Summarize PDF"}</Button>
           {status && <p role="status" className="mt-3 text-sm text-muted-foreground">{status}</p>}
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+
+        </ToolPanel>
+        <ToolPanel stage="result" title="Result">
           {result && <>
             <Textarea aria-label="Result text" className="mt-4 min-h-48" readOnly value={result} />
             <Button className="mt-3" variant="outline" onClick={() => downloadFile(new Blob([result], { type: "text/plain;charset=utf-8" }), translate ? "translation.txt" : "summary.txt")}>Download text</Button>
           </>}
+          {!result && <EmptyOutput />}
         </ToolPanel>
       </div>
     </ToolWorkspace>

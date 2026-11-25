@@ -1,16 +1,22 @@
 "use client";
 
+import { PdfPagePicker } from "@/components/pdf/pdf-page-picker";
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolOutput, useToolExport } from "@/components/layout/tool-output";
 import { useState } from "react";
+import { PDFDocument } from "pdf-lib";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runPdfEngine } from "@/lib/pdf-engine";
 import { extractPdf } from "@/lib/pdf-pages";
-import { downloadFile, formatBytes } from "@/lib/download-manager";
+import { formatBytes } from "@/lib/download-manager";
 
 export default function PdfWorkflow() {
   const [file, setFile] = useState<File | null>(null);
+  const output = useToolExport(file);
+  const [pageCount, setPageCount] = useState(0);
   const [pages, setPages] = useState("");
   const [compress, setCompress] = useState(true);
   const [password, setPassword] = useState("");
@@ -43,7 +49,7 @@ export default function PdfWorkflow() {
         const result = await runPdfEngine(current, "protect", password);
         current = new File([result.blob], name, { type: "application/pdf" });
       }
-      downloadFile(current, name);
+      output.save(current, name);
       setPassword("");
       setStatus("Download ready · " + formatBytes(current.size));
     } catch (reason) {
@@ -57,18 +63,26 @@ export default function PdfWorkflow() {
   return (
     <ToolWorkspace category="PDF tools" backHref="/pdf" title="PDF Workflow" description="Run several operations in one pass. The tool writes a separate copy.">
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        <ToolPanel title="Source PDF">
-          {file && <p className="mb-3 break-all rounded-lg border bg-background p-3 text-sm">{file.name} · {formatBytes(file.size)}</p>}
-          <FilePicker accept=".pdf,application/pdf" action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF here." disabled={busy} onFiles={files => {
+        <ToolPanel stage="input" title="Source PDF">
+          {file && <div className="mb-3"><ToolFile blob={file} name={file.name} /></div>}
+          <FilePicker accept=".pdf,application/pdf" action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF here." disabled={busy} onFiles={async files => {
             if (files.length !== 1) { setError("Choose one PDF."); return; }
-            setFile(files[0]); setError(""); setStatus("");
+            setBusy(true); setError(""); setStatus("");
+            setFile(files[0]); setPageCount(0); setPages("");
+            try {
+              const pdf = await PDFDocument.load(await files[0].arrayBuffer(), { updateMetadata: false });
+              setPageCount(pdf.getPageCount());
+            } catch {
+              // Whole-file operations and typed selection use their own PDF readers.
+            } finally {
+              setBusy(false);
+            }
           }} />
         </ToolPanel>
-        <ToolPanel title="Workflow steps" description="Extract pages first, compress the result, then apply AES-256 protection last.">
+        <ToolPanel stage="settings" title="Workflow steps" description="Extract pages first, compress the result, then apply AES-256 protection last.">
           <fieldset disabled={busy} className="space-y-4">
-            <label className="block text-sm font-medium">Pages to extract (optional)
-              <Input className="mt-1" placeholder="All pages" value={pages} onChange={event => setPages(event.target.value)} />
-            </label>
+            <PdfPagePicker file={file} total={pageCount} value={pages} onChange={setPages}
+              label="Pages to extract (optional)" placeholder="All pages" initialMode="type" disabled={busy} />
             <label className="flex items-center gap-2 text-sm font-medium">
               <input type="checkbox" className="accent-primary" checked={compress} onChange={event => setCompress(event.target.checked)} />
               Compress without rasterizing pages
@@ -81,6 +95,7 @@ export default function PdfWorkflow() {
           {status && <p role="status" className="mt-3 text-sm text-muted-foreground">{status}</p>}
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
         </ToolPanel>
+        <ToolOutput file={output.file} />
       </div>
     </ToolWorkspace>
   );

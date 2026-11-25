@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ChevronLeft, LockKeyhole } from "lucide-react";
+import { ArrowDownToLine, ChevronLeft, Clapperboard, FileText, Image, Import, LockKeyhole, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { ThumbnailToggle } from "./thumbnail-preference";
 
 type WorkspaceProps = {
   category: string;
@@ -8,38 +9,59 @@ type WorkspaceProps = {
   title: string;
   description: string;
   children: ReactNode;
+  tone?: "pdf" | "image" | "media";
 };
 
-export function ToolWorkspace({ category, backHref, title, description, children }: WorkspaceProps) {
+const workspaceIcons: Partial<Record<string, LucideIcon>> = { pdf: FileText, image: Image, media: Clapperboard };
+const stages = {
+  input: { label: "Input", icon: Import },
+  settings: { label: "Settings", icon: SlidersHorizontal },
+  result: { label: "Output", icon: ArrowDownToLine },
+};
+
+export function ToolWorkspace({ category, backHref, title, description, children, tone }: WorkspaceProps) {
+  const theme = tone ?? (backHref === "/" ? title.toLowerCase().split(" ")[0] : backHref.slice(1));
+  const Icon = workspaceIcons[theme];
   return (
-    <main className="mx-auto w-full max-w-[76rem] px-[18px] pt-8 pb-14 sm:px-6 lg:pt-12">
-      <Link href={backHref} className="inline-flex min-h-8 items-center gap-1 rounded-md text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-2">
-        <ChevronLeft className="size-4" aria-hidden="true" /> {category}
-      </Link>
-      <div className="mt-3 mb-7 flex flex-wrap items-end justify-between gap-4 border-b pb-6 sm:mb-9">
-        <div>
-          <h1 className="text-4xl leading-tight font-bold tracking-[-0.06em] sm:text-5xl">{title}</h1>
-          <p className="mt-2 max-w-xl text-base leading-relaxed text-muted-foreground">{description}</p>
+    <main id="main-content" data-workspace={theme} className="tool-workspace mx-auto w-full max-w-[78rem] px-4 pt-5 pb-14 sm:px-7 sm:pt-8">
+      <div className="tool-intro mb-6 rounded-[1.65rem] border px-5 pt-3 pb-5 sm:px-7 sm:pt-4 sm:pb-6">
+        <Link href={backHref} className="studio-back inline-flex min-h-8 items-center gap-1 rounded-lg text-sm font-medium focus-visible:outline-2">
+          <ChevronLeft className="size-4" aria-hidden="true" /> {category}
+        </Link>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            {Icon && <span className="studio-mark"><Icon size={24} aria-hidden="true" /></span>}
+            <div>
+              <h1 className="wrap-anywhere text-[clamp(1.85rem,5vw,3.4rem)] leading-[1.04] font-bold tracking-[-0.065em]">{title}</h1>
+              <p className="studio-description mt-2 max-w-2xl text-sm leading-relaxed sm:text-base">{description}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {Icon && <ThumbnailToggle />}
+            <span className="studio-local inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium">
+              <LockKeyhole className="size-4" aria-hidden="true" /> {Icon ? "On device" : "Runs on your device"}
+            </span>
+          </div>
         </div>
-        <span className="inline-flex items-center gap-2 rounded-lg border bg-accent px-3 py-2 text-sm font-medium">
-          <LockKeyhole className="size-4" aria-hidden="true" /> Runs on your device
-        </span>
       </div>
       {children}
     </main>
   );
 }
 
-export function ToolPanel({ title, description, action, children }: {
+export function ToolPanel({ title, description, action, stage, children }: {
   title: string;
   description?: string;
   action?: ReactNode;
+  stage?: keyof typeof stages;
   children: ReactNode;
 }) {
+  const step = stage ? stages[stage] : undefined;
   return (
-    <section className="min-w-0 rounded-2xl border bg-card p-4 shadow-xs sm:p-6">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+    <section id={stage === "result" ? "tool-result" : undefined} tabIndex={stage === "result" ? -1 : undefined} data-stage={stage} className="tool-panel min-w-0 rounded-[1.35rem] border bg-card p-4 sm:p-5">
+      <div className="studio-panel-header mb-4 flex flex-wrap items-start justify-between gap-2">
         <div>
+          {step && <p className="studio-stage"><step.icon size={15} aria-hidden="true" />{step.label}</p>}
           <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
           {description && <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>}
         </div>

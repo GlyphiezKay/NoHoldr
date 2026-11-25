@@ -1,5 +1,7 @@
 "use client";
 
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolOutput, useToolExport } from "@/components/layout/tool-output";
 import { useState } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { PDFDocument } from "pdf-lib";
@@ -7,7 +9,7 @@ import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Input } from "@/components/ui/input";
-import { downloadPdfBytes } from "@/lib/pdf-utils";
+import { pdfBytesToBlob } from "@/lib/pdf-utils";
 
 type Entry = { id: string; file: File };
 async function normalizedImage(file: File) {
@@ -31,6 +33,7 @@ async function normalizedImage(file: File) {
 
 export function PdfImagesBuilder({ scan }: { scan?: boolean }) {
   const [files, setFiles] = useState<Entry[]>([]);
+  const output = useToolExport(files);
   const [paper, setPaper] = useState("auto");
   const [margin, setMargin] = useState("18");
   const [busy, setBusy] = useState(false);
@@ -75,7 +78,7 @@ export function PdfImagesBuilder({ scan }: { scan?: boolean }) {
         const size = embedded.scaleToFit(width - 2 * inset, height - 2 * inset);
         pdf.addPage([width, height]).drawImage(embedded, { ...size, x: (width - size.width) / 2, y: (height - size.height) / 2 });
       }
-      downloadPdfBytes(await pdf.save(), scan ? "scan.pdf" : "images.pdf");
+      output.save(pdfBytesToBlob(await pdf.save()), scan ? "scan.pdf" : "images.pdf");
       setStatus("Downloaded " + files.length + " pages.");
     } catch (reason) {
       setStatus("");
@@ -88,7 +91,7 @@ export function PdfImagesBuilder({ scan }: { scan?: boolean }) {
     <ToolWorkspace category="PDF tools" backHref="/pdf" title={scan ? "Scan to PDF" : "Images to PDF"}
       description={scan ? "Take photos of documents or add existing scans, then assemble them into a PDF." : "Combine images into a PDF, with one image per page."}>
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        <ToolPanel title="Page images" description="The order shown here is the order in the PDF.">
+        <ToolPanel stage="input" title="Page images" description="The order shown here is the order in the PDF.">
           <FilePicker multiple accept="image/*" action={files.length ? "Add images" : "Choose images"} hint="Or drop image files here." disabled={busy} onFiles={add} />
           {scan && <label className="mt-3 block text-sm font-medium">Take a photo
             <input type="file" accept="image/*" capture="environment" disabled={busy} className="mt-2 block w-full text-sm"
@@ -100,14 +103,15 @@ export function PdfImagesBuilder({ scan }: { scan?: boolean }) {
           </label>}
           {files.length > 0 && <ol className="mt-4 space-y-2">
             {files.map(({ id, file }, index) => <li key={id} className="flex items-center gap-1 rounded-lg border bg-background p-2">
-              <span className="min-w-0 flex-1 truncate text-sm">{index + 1}. {file.name}</span>
+              <span className="shrink-0 text-sm text-muted-foreground">{index + 1}.</span>
+              <div className="min-w-0 flex-1"><ToolFile blob={file} name={file.name} /></div>
               <Button variant="ghost" size="icon-sm" aria-label={"Move " + file.name + " up"} disabled={busy || index === 0} onClick={() => move(index, -1)}><ArrowUp /></Button>
               <Button variant="ghost" size="icon-sm" aria-label={"Move " + file.name + " down"} disabled={busy || index === files.length - 1} onClick={() => move(index, 1)}><ArrowDown /></Button>
               <Button variant="ghost" size="icon-sm" aria-label={"Remove " + file.name} disabled={busy} onClick={() => setFiles(current => current.filter(item => item.id !== id))}><X /></Button>
             </li>)}
           </ol>}
         </ToolPanel>
-        <ToolPanel title="PDF layout">
+        <ToolPanel stage="settings" title="PDF layout">
           <label className="block text-sm font-medium">Page size
             <select className="mt-2 h-10 w-full rounded-md border bg-background px-3" value={paper} disabled={busy} onChange={event => setPaper(event.target.value)}>
               <option value="auto">Fit each image</option><option value="a4">A4 (portrait)</option><option value="letter">US Letter (portrait)</option>
@@ -120,6 +124,7 @@ export function PdfImagesBuilder({ scan }: { scan?: boolean }) {
           {status && <p role="status" className="mt-3 text-sm text-muted-foreground">{status}</p>}
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
         </ToolPanel>
+        <ToolOutput file={output.file} />
       </div>
     </ToolWorkspace>
   );

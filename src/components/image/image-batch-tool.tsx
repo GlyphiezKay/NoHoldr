@@ -2,13 +2,15 @@
 
 import { useRef, useState } from "react";
 import { Download, X } from "lucide-react";
+import { ToolFile } from "@/components/layout/tool-file";
+import { EmptyOutput, ViewToolResult } from "@/components/layout/tool-output";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { findCompressionTarget } from "@/lib/compression-target";
-import { downloadAsZip, downloadFile, formatBytes } from "@/lib/download-manager";
+import { downloadAsZip, downloadFile } from "@/lib/download-manager";
 import { exportCanvas, imageFormats, imageOutputName, makeImageCanvas, opaqueFormat, openLocalImage, uniqueImageName, type ImageFormat } from "@/lib/image-processing";
 
 const modes = {
@@ -129,7 +131,7 @@ export function ImageBatchTool({ mode, fromConvert = false }: { mode: ImageBatch
         try {
           const result = await processImage(item.file, mode, settings);
           const name = result.keep ? item.file.name : imageOutputName(item.file, info.suffix, format);
-          const parts = [formatBytes(result.blob.size), result.width + " × " + result.height + " px"];
+          const parts = [result.width + " × " + result.height + " px"];
           if (result.keep) parts.push("Original kept");
           else if (mode === "compress") parts.push(Math.round((1 - result.blob.size / item.file.size) * 100) + "% smaller");
           if (settings.target) parts.push(result.blob.size <= settings.target ? "Target met" : "Target not reached");
@@ -160,24 +162,21 @@ export function ImageBatchTool({ mode, fromConvert = false }: { mode: ImageBatch
   }
 
   return (
-    <ToolWorkspace category={fromConvert ? "Convert" : "Image tools"} backHref={fromConvert ? "/convert" : "/image"} title={info.title} description={info.description}>
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
-        <ToolPanel title="Images" action={items.length > 0 && <Button variant="ghost" size="sm" disabled={locked} onClick={() => { setItems([]); setStatus(""); }}>Clear list</Button>}>
+    <ToolWorkspace tone="image" category={fromConvert ? "Convert" : "Image tools"} backHref={fromConvert ? "/convert" : "/image"} title={info.title} description={info.description}>
+      <div className="studio-flow">
+        <ToolPanel stage="input" title="Source images" action={items.length > 0 && <Button variant="ghost" size="sm" disabled={locked} onClick={() => { setItems([]); setStatus(""); }}>Clear list</Button>}>
           <FilePicker multiple accept="image/*,.heic,.heif,.tiff" action={items.length ? "Add images" : "Choose images"} hint="Or drop image files here." disabled={locked} onFiles={add} />
           {items.length > 0 && <ul className="mt-4 space-y-2">
-            {items.map(item => <li key={item.id} className="flex items-center gap-2 rounded-lg border bg-background p-2 sm:p-3">
+            {items.map(item => <li key={item.id} className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold" title={item.file.name}>{item.file.name}</p>
-                <p className="text-sm text-muted-foreground">Source · {formatBytes(item.file.size)}</p>
-                {item.output && <p className="text-sm text-muted-foreground">{item.output.detail}</p>}
-                {item.error && <p className="text-sm text-destructive">{item.error}</p>}
+                <ToolFile blob={item.file} name={item.file.name} />
+                {item.error && <p className="mt-1 text-sm text-destructive">{item.error}</p>}
               </div>
-              {item.output && <Button variant="outline" size="icon" aria-label={"Download " + item.output.name} disabled={locked} onClick={() => downloadFile(item.output!.blob, item.output!.name)}><Download /></Button>}
               <Button variant="ghost" size="icon" aria-label={"Remove " + item.file.name} disabled={locked} onClick={() => setItems(current => current.filter(other => other.id !== item.id))}><X /></Button>
             </li>)}
           </ul>}
         </ToolPanel>
-        <ToolPanel title="Output settings">
+        <ToolPanel stage="settings" title="Output settings">
           <fieldset disabled={locked} className="space-y-3">
             <label className="block text-sm font-medium">Format<select aria-label="Format" className="mt-2 block h-10 w-full rounded border bg-background px-3" value={format} onChange={event => setFormat(event.target.value as ImageFormat)}>
               {formats.map(value => <option key={value} value={value}>{imageFormats[value].label}</option>)}
@@ -210,9 +209,18 @@ export function ImageBatchTool({ mode, fromConvert = false }: { mode: ImageBatch
           <Button className="mt-4 w-full" size="lg" disabled={!items.length || locked} onClick={run}>{info.action}</Button>
           {busy && <div className="mt-3 space-y-2"><Progress value={progress} aria-label="Batch progress" />
             <Button variant="outline" size="sm" onClick={() => { stopped.current = true; }}>Stop after this image</Button></div>}
-          {output.length > 1 && <Button className="mt-2 w-full" variant="outline" disabled={locked} onClick={zip}><Download /> {zipping ? "Preparing ZIP…" : "Download ZIP"}</Button>}
           {status && <p role="status" className="mt-3 text-sm text-muted-foreground">{status}</p>}
           {problem && <p role="alert" className="mt-3 text-sm text-destructive">{problem}</p>}
+          {output.length > 0 && !busy && <ViewToolResult />}
+        </ToolPanel>
+        <ToolPanel stage="result" title="Results">
+          {output.length ? <ul className="grid gap-2 lg:grid-cols-2">
+            {output.map((file, index) => <li key={index} className="flex min-w-0 items-center gap-2">
+              <div className="min-w-0 flex-1"><ToolFile blob={file.blob} name={file.name} detail={file.detail} /></div>
+              <Button variant="outline" size="icon" aria-label={"Download " + file.name} disabled={locked} onClick={() => downloadFile(file.blob, file.name)}><Download /></Button>
+            </li>)}
+          </ul> : <EmptyOutput />}
+          {output.length > 1 && <Button className="mt-3" variant="outline" disabled={locked} onClick={zip}><Download /> {zipping ? "Preparing ZIP…" : "Download ZIP"}</Button>}
         </ToolPanel>
       </div>
     </ToolWorkspace>

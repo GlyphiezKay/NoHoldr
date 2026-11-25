@@ -1,52 +1,56 @@
-import Link from "next/link";
-import { LucideIcon } from "lucide-react";
-import { ArrowLeft, Video, FileAudio, Scissors, Gauge, Music } from "lucide-react";
-import { Button } from "@/components/ui/button";
+"use client";
 
-interface Tool { name: string; href: string; icon: LucideIcon; ready?: boolean; }
+import { useState } from "react";
+import { AudioLines, Clapperboard, FileAudio, Gauge, Image, Music, Scissors, Search, Video } from "lucide-react";
+import { ToolDirectoryHeader } from "@/components/layout/tool-directory-header";
+import { ToolGroup } from "@/components/layout/tool-group";
+import { matchesTool, type DirectoryGroup } from "@/lib/tool-directory";
+import styles from "@/components/layout/tool-directory.module.css";
 
-const audioTools: Tool[] = [
-    { name: "Convert Audio", href: "/media/audio-convert", icon: FileAudio, ready: true },
-    { name: "Trim Audio", href: "/media/audio-trim", icon: Scissors, ready: true },
-    { name: "Extract Audio", href: "/media/extract-audio", icon: Music, ready: true },
+const groups: DirectoryGroup[] = [
+  { title: "Video", icon: Clapperboard, tone: "blue", tools: [
+    { name: "Compress video", href: "/media/video-compress", icon: Gauge, description: "Adjust resolution and bitrate, then compare the file sizes." },
+    { name: "Trim video", href: "/media/video-trim", icon: Scissors, description: "Pick exact start and end times for a clip." },
+    { name: "Convert video", href: "/media/video-convert", icon: Video, description: "Export WebM with a choice of VP8 or VP9." },
+    { name: "Extract frame", href: "/media/frame", icon: Image, description: "Save a frame as PNG or JPEG." },
+  ] },
+  { title: "Audio", icon: AudioLines, tone: "green", tools: [
+    { name: "Trim audio", href: "/media/audio-trim", icon: Scissors, description: "Preview an exact range and save a WAV clip." },
+    { name: "Convert audio", href: "/media/audio-convert", icon: FileAudio, description: "Export WAV and choose the bit depth and channels." },
+    { name: "Extract audio", href: "/media/extract-audio", icon: Music, description: "Save the sound from a video as WAV." },
+  ] },
 ];
-
-const videoTools: Tool[] = [
-    { name: "Convert Video", href: "/media/video-convert", icon: Video, ready: true },
-    { name: "Compress Video", href: "/media/video-compress", icon: Gauge, ready: true },
-    { name: "Trim Video", href: "/media/video-trim", icon: Scissors, ready: true },
-];
-
-function ToolSection({ title, tools }: { title: string; tools: Tool[] }) {
-    return (
-        <section className="mb-8">
-            <h2 className="text-sm font-medium text-muted-foreground mb-3">{title}</h2>
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                {tools.map((tool) => (
-                    <Link key={tool.name} href={tool.href} className={`flex flex-col items-center justify-center p-3 sm:p-4 rounded-lg border bg-card transition-all duration-150 ${tool.ready ? "hover:border-foreground/30 hover:shadow-sm active:scale-[0.98]" : "opacity-40 pointer-events-none"}`}>
-                        <tool.icon className="h-5 w-5 mb-1.5 text-muted-foreground" />
-                        <span className="text-xs font-medium text-center leading-tight">{tool.name}</span>
-                    </Link>
-                ))}
-            </div>
-        </section>
-    );
-}
 
 export default function MediaToolsPage() {
-    return (
-        <div className="max-w-5xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                    <Link href="/"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <div>
-                    <h1 className="text-xl font-semibold">Media Tools</h1>
-                    <p className="text-xs text-muted-foreground">Audio & video processing</p>
-                </div>
-            </div>
-            <ToolSection title="AUDIO" tools={audioTools} />
-            <ToolSection title="VIDEO" tools={videoTools} />
+  const [query, setQuery] = useState("");
+  const visibleGroups = groups
+    .map(group => ({ ...group, tools: group.tools.filter(tool =>
+      matchesTool(tool, query) || group.title.toLowerCase().includes(query.trim().toLowerCase())
+    ) }))
+    .filter(group => group.tools.length > 0);
+  const count = visibleGroups.reduce((total, group) => total + group.tools.length, 0);
+
+  return (
+    <main id="main-content" className={styles.directory} data-tone="media">
+      <ToolDirectoryHeader
+        title="Media tools"
+        description="Trim, compress, and convert audio or video right in your browser."
+        icon={Clapperboard}
+        searchLabel="Find a media tool"
+        placeholder="Search trim, convert, WAV…"
+        query={query} onChange={setQuery}
+      />
+      <p role="status" className="sr-only">{count} {count === 1 ? "tool" : "tools"} found</p>
+      {count > 0 ? (
+        <div className={styles.groups} data-single={visibleGroups.length === 1}>
+          {visibleGroups.map(group => <ToolGroup key={group.title} group={group} />)}
         </div>
-    );
+      ) : (
+        <div className={styles.empty}>
+          <Search size={24} aria-hidden="true" />
+          <p>No media tools match your search.</p>
+        </div>
+      )}
+    </main>
+  );
 }

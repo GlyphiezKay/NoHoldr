@@ -1,11 +1,12 @@
 "use client";
 
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolOutput, useToolExport } from "@/components/layout/tool-output";
 import Link from "next/link";
 import { useState } from "react";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
-import { downloadFile } from "@/lib/download-manager";
 import { exportPdf, type ExportFormat } from "@/lib/pdf-export";
 
 const formats = {
@@ -18,6 +19,7 @@ const formats = {
 export function PdfExportTool({ format }: { format: ExportFormat }) {
   const info = formats[format];
   const [file, setFile] = useState<File | null>(null);
+  const output = useToolExport(file);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -29,7 +31,7 @@ export function PdfExportTool({ format }: { format: ExportFormat }) {
     setStatus("Opening PDF…");
     try {
       const blob = await exportPdf(file, format, (page, total) => setStatus("Processing page " + page + " of " + total + "…"));
-      downloadFile(blob, file.name.replace(/\.pdf$/i, "") + "." + info.extension);
+      output.save(blob, file.name.replace(/\.pdf$/i, "") + "." + info.extension);
       setStatus("Download ready.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not export the PDF.");
@@ -42,19 +44,20 @@ export function PdfExportTool({ format }: { format: ExportFormat }) {
   return (
     <ToolWorkspace category="PDF tools" backHref="/pdf" title={info.name} description={info.description}>
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        <ToolPanel title="Source PDF">
-          {file && <p className="mb-3 break-all rounded-lg border bg-background p-3 text-sm">{file.name}</p>}
+        <ToolPanel stage="input" title="Source PDF">
+          {file && <div className="mb-3"><ToolFile blob={file} name={file.name} /></div>}
           <FilePicker accept=".pdf,application/pdf" action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF here." disabled={busy} onFiles={files => {
             if (files.length !== 1) { setError("Choose one PDF."); return; }
             setFile(files[0]); setError(""); setStatus("");
           }} />
         </ToolPanel>
-        <ToolPanel title="Export">
+        <ToolPanel stage="settings" title="Export">
           {format !== "slides" && <p className="mb-4 text-sm text-muted-foreground">For scanned documents, first make a searchable copy with <Link href="/pdf/ocr" className="underline underline-offset-2">OCR PDF</Link>.</p>}
           <Button className="w-full" disabled={!file || busy} onClick={run}>Download {info.extension.toUpperCase()}</Button>
           {status && <p role="status" className="mt-3 text-sm text-muted-foreground">{status}</p>}
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
         </ToolPanel>
+        <ToolOutput file={output.file} />
       </div>
     </ToolWorkspace>
   );

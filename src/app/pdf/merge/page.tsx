@@ -1,15 +1,16 @@
 "use client";
 
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolOutput, useToolExport } from "@/components/layout/tool-output";
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Download, FileText, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, X } from "lucide-react";
 import { PDFDocument } from "pdf-lib";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { formatBytes } from "@/lib/download-manager";
-import { downloadPdfBytes } from "@/lib/pdf-utils";
+import { pdfBytesToBlob } from "@/lib/pdf-utils";
 
 interface UploadedFile {
   id: string;
@@ -19,6 +20,7 @@ interface UploadedFile {
 
 export default function MergePDFPage() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
+  const output = useToolExport(files);
   const [filename, setFilename] = useState("merged.pdf");
   const [isReading, setIsReading] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
@@ -79,7 +81,7 @@ export default function MergePDFPage() {
         pages.forEach(page => merged.addPage(page));
         setProgress(Math.round((index + 1) / files.length * 90));
       }
-      downloadPdfBytes(await merged.save(), outputName);
+      output.save(pdfBytesToBlob(await merged.save()), outputName);
       setMessage(`Downloaded ${outputName} with ${totalPages} pages.`);
     } catch {
       setError("Could not merge these files. Try removing the problem PDF and running the merge again.");
@@ -91,7 +93,7 @@ export default function MergePDFPage() {
   return (
     <ToolWorkspace category="PDF tools" backHref="/pdf" title="Merge PDF" description="Combine PDFs in the order you choose.">
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-        <ToolPanel title="PDF files" description="Add at least two PDFs. The file at the top becomes the start of the merged document."
+        <ToolPanel stage="input" title="PDF files" description="Add at least two PDFs. The file at the top becomes the start of the merged document."
           action={files.length > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setFiles([]); setMessage(""); setError(""); }}>Clear list</Button>}>
           <FilePicker multiple accept=".pdf,application/pdf" action={files.length ? "Add PDFs" : "Choose PDFs"}
             hint="Or drop PDF files here." disabled={busy} onFiles={addFiles} />
@@ -101,11 +103,7 @@ export default function MergePDFPage() {
               {files.map(({ id, file, pageCount }, index) => (
                 <li key={id} className="flex items-center gap-2 rounded-lg border bg-background px-2 py-2 sm:px-3">
                   <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{index + 1}.</span>
-                  <FileText aria-hidden="true" className="hidden size-4 shrink-0 text-primary sm:block" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold" title={file.name}>{file.name}</p>
-                    <p className="text-sm text-muted-foreground">{pageCount} {pageCount === 1 ? "page" : "pages"} · {formatBytes(file.size)}</p>
-                  </div>
+                  <div className="min-w-0 flex-1"><ToolFile blob={file} name={file.name} detail={pageCount + (pageCount === 1 ? " page" : " pages")} /></div>
                   <Button variant="ghost" size="icon-sm" aria-label={`Move ${file.name} up`} disabled={busy || index === 0} onClick={() => moveFile(index, -1)}><ArrowUp /></Button>
                   <Button variant="ghost" size="icon-sm" aria-label={`Move ${file.name} down`} disabled={busy || index === files.length - 1} onClick={() => moveFile(index, 1)}><ArrowDown /></Button>
                   <Button variant="ghost" size="icon-sm" aria-label={`Remove ${file.name}`} disabled={busy}
@@ -115,7 +113,7 @@ export default function MergePDFPage() {
             </ol>
           )}
         </ToolPanel>
-        <ToolPanel title="Output" description={`${files.length} ${files.length === 1 ? "file" : "files"} · ${totalPages} ${totalPages === 1 ? "page" : "pages"}`}>
+        <ToolPanel stage="settings" title="Merge settings" description={`${files.length} ${files.length === 1 ? "file" : "files"} · ${totalPages} ${totalPages === 1 ? "page" : "pages"}`}>
           <label htmlFor="merge-name" className="mb-2 block text-sm font-medium">File name</label>
           <Input id="merge-name" value={filename} onChange={event => setFilename(event.target.value)} disabled={busy} maxLength={180} />
           <Button className="mt-4 w-full" size="lg" disabled={busy || files.length < 2} onClick={merge}>
@@ -125,6 +123,7 @@ export default function MergePDFPage() {
           {message && <p role="status" className="mt-3 wrap-anywhere text-sm text-muted-foreground">{message}</p>}
           {error && <p role="alert" className="mt-3 wrap-anywhere text-sm text-destructive">{error}</p>}
         </ToolPanel>
+        <ToolOutput file={output.file} />
       </div>
     </ToolWorkspace>
   );

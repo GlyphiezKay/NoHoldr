@@ -1,6 +1,6 @@
 import type { PDFPageProxy } from "pdfjs-dist";
 
-export async function openPdf(file: File) {
+export async function openPdf(file: Blob) {
   const { pdfjsLib } = await import("./pdfjs-setup");
   return pdfjsLib.getDocument({
     data: new Uint8Array(await file.arrayBuffer()),

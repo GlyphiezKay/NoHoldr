@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { Download } from "lucide-react";
+import { EmptyOutput } from "@/components/layout/tool-output";
+import { ToolFile } from "@/components/layout/tool-file";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
@@ -60,14 +62,11 @@ export function PdfEngineTool({ operation }: { operation: Exclude<PdfEngineOpera
   return (
     <ToolWorkspace category="PDF tools" backHref="/pdf" title={text.title} description={text.description}>
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        <ToolPanel title="Source PDF">
-          {file && <div className="mb-3 flex min-w-0 items-center gap-2 rounded-lg border bg-background p-3">
-            <FileText className="size-5 shrink-0" aria-hidden="true" />
-            <p className="min-w-0 break-all text-sm font-semibold">{file.name} <span className="font-normal text-muted-foreground">· {formatBytes(file.size)}</span></p>
-          </div>}
+        <ToolPanel stage="input" title="Source PDF">
+          {file && <div className="mb-3"><ToolFile blob={file} name={file.name} /></div>}
           <FilePicker accept=".pdf,application/pdf" action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF here." disabled={busy} onFiles={select} />
         </ToolPanel>
-        <ToolPanel title={operation === "repair" ? "Recovery" : "Password"}>
+        <ToolPanel stage="settings" title={operation === "repair" ? "Recovery" : "Password"}>
           <form className="space-y-4" onSubmit={event => { event.preventDefault(); void process(); }}>
             {operation !== "repair" && <label className="block text-sm font-medium">
               {operation === "protect" ? "New password" : "Current password"}
@@ -82,10 +81,15 @@ export function PdfEngineTool({ operation }: { operation: Exclude<PdfEngineOpera
             {busy && <p role="status" className="text-sm text-muted-foreground">The local PDF engine is working.</p>}
           </form>
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+
+        </ToolPanel>
+        <ToolPanel stage="result" title="Result">
           {result && file && <div className="mt-4 space-y-2 rounded-lg border bg-background p-3">
+            <ToolFile blob={result.blob} name={file.name.replace(/\.pdf$/i, "") + "_" + text.suffix + ".pdf"} />
             <p role="status" className="text-sm">{formatBytes(result.blob.size)} · {result.warnings ? "Completed with structural warnings. Review the output." : "Ready to download."}</p>
             <Button variant="outline" onClick={() => downloadFile(result.blob, file.name.replace(/\.pdf$/i, "") + "_" + text.suffix + ".pdf")}><Download />Download PDF</Button>
           </div>}
+          {!result && <EmptyOutput />}
         </ToolPanel>
       </div>
     </ToolWorkspace>

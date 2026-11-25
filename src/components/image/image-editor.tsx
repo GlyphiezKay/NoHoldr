@@ -1,12 +1,13 @@
 "use client";
 
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolOutput, useToolExport } from "@/components/layout/tool-output";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { Download, RotateCcw, Trash2 } from "lucide-react";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Input } from "@/components/ui/input";
-import { downloadFile } from "@/lib/download-manager";
 import { encodeCanvas, imageOutputName, makeImageCanvas, openLocalImage } from "@/lib/image-processing";
 
 const operations = {
@@ -145,6 +146,7 @@ function position(event: PointerEvent<HTMLDivElement>) {
 export function ImageEditor({ mode }: { mode: ImageEditorMode }) {
   const info = operations[mode];
   const [source, setSource] = useState<{ file: File; image: HTMLImageElement } | null>(null);
+  const output = useToolExport(source);
   const [settings, setSettings] = useState(initial);
   const [masks, setMasks] = useState<Mask[]>([]);
   const [box, setBox] = useState(defaultBox);
@@ -200,7 +202,7 @@ export function ImageEditor({ mode }: { mode: ImageEditorMode }) {
       try {
         paint(context, source.image, mode, settings, masks);
         const blob = await encodeCanvas(canvas, "image/" + format, 0.92);
-        downloadFile(blob, imageOutputName(source.file, info.suffix, format));
+        output.save(blob, imageOutputName(source.file, info.suffix, format));
       } finally {
         canvas.width = canvas.height = 0;
       }
@@ -214,7 +216,8 @@ export function ImageEditor({ mode }: { mode: ImageEditorMode }) {
   return (
     <ToolWorkspace category="Image tools" backHref="/image" title={info.title} description={info.description}>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <ToolPanel title="Image preview" action={source && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setSettings(initial); setMasks([]); setBox(defaultBox); }}><RotateCcw />Reset</Button>}>
+        <ToolPanel stage="input" title="Image preview" action={source && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setSettings(initial); setMasks([]); setBox(defaultBox); }}><RotateCcw />Reset</Button>}>
+          {source && <div className="mb-3"><ToolFile blob={source.file} name={source.file.name} /></div>}
           <FilePicker accept="image/*" action={source ? "Replace image" : "Choose image"} hint="Or drop an image here." disabled={busy} onFiles={load} />
           {source && <div className="mt-4 flex justify-center overflow-hidden rounded border bg-muted">
             <div className={"relative max-w-full " + (mode === "blur" ? "touch-none cursor-crosshair" : "")}
@@ -235,7 +238,7 @@ export function ImageEditor({ mode }: { mode: ImageEditorMode }) {
             </div>
           </div>}
         </ToolPanel>
-        <ToolPanel title="Settings">
+        <ToolPanel stage="settings" title="Settings">
           <fieldset disabled={!source || busy} className="space-y-3">
             {mode === "edit" && <>
               {(["brightness", "contrast", "saturation"] as const).map(key => <label key={key} className="block text-sm font-medium capitalize">{key} · {settings[key]}%
@@ -303,6 +306,7 @@ export function ImageEditor({ mode }: { mode: ImageEditorMode }) {
           <Button className="mt-4 w-full" size="lg" disabled={!source || busy || (mode === "blur" && !masks.length) || (mode === "watermark" && !settings.logo && !settings.caption.trim())} onClick={save}><Download />Export image</Button>
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
         </ToolPanel>
+        <ToolOutput file={output.file} />
       </div>
     </ToolWorkspace>
   );

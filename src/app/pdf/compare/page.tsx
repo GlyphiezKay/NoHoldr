@@ -1,11 +1,14 @@
 "use client";
 
+import { PdfPagePicker } from "@/components/pdf/pdf-page-picker";
+import { useThumbnails } from "@/components/layout/thumbnail-preference";
+import { ToolFile } from "@/components/layout/tool-file";
 import { useState } from "react";
 import Image from "next/image";
+import { FileText } from "lucide-react";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { openPdf, renderPdfCanvas } from "@/lib/pdf-render";
 
 async function snapshot(file: File, number: number) {
@@ -42,19 +45,36 @@ function compare(a: Snapshot, b: Snapshot) {
 }
 
 export default function ComparePdf() {
-  const [left, setLeft] = useState<File | null>(null);
-  const [right, setRight] = useState<File | null>(null);
+  const thumbnails = useThumbnails();
+  const [left, setLeft] = useState<{ file: File; pages: number } | null>(null);
+  const [right, setRight] = useState<{ file: File; pages: number } | null>(null);
   const [page, setPage] = useState("1");
   const [result, setResult] = useState<{ message: string; page: number; snapshots: Array<{ url?: string; width: number; height: number; pages: number }> } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  function choose(files: File[], index: number) {
+  const pageSource = (left?.pages ?? 0) >= (right?.pages ?? 0) ? left : right;
+
+  async function choose(files: File[], index: number) {
     if (files.length !== 1) { setError("Choose one PDF for each side."); return; }
-    if (index === 0) setLeft(files[0]);
-    else setRight(files[0]);
-    setResult(null);
     setError("");
+    setBusy(true);
+    try {
+      const task = await openPdf(files[0]);
+      try {
+        const pdf = await task.promise;
+        const entry = { file: files[0], pages: pdf.numPages };
+        (index === 0 ? setLeft : setRight)(entry);
+        setResult(null);
+        setPage("1");
+      } finally {
+        await task.destroy().catch(() => {});
+      }
+    } catch {
+      setError("Could not open this PDF.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function run() {
@@ -66,8 +86,8 @@ export default function ComparePdf() {
     setResult(null);
     const snapshots: Snapshot[] = [];
     try {
-      snapshots.push(await snapshot(left, number));
-      snapshots.push(await snapshot(right, number));
+      snapshots.push(await snapshot(left.file, number));
+      snapshots.push(await snapshot(right.file, number));
       if (snapshots.every(item => !item.canvas)) throw new Error("Neither file contains that page.");
       setResult({ page: number, message: compare(snapshots[0], snapshots[1]), snapshots: snapshots.map(item => ({
         pages: item.pages, url: item.canvas?.toDataURL("image/png"),
@@ -84,16 +104,16 @@ export default function ComparePdf() {
   return (
     <ToolWorkspace category="PDF tools" backHref="/pdf" title="Compare PDFs" description="Compare pages side by side and measure visible changes at preview resolution.">
       <div className="grid gap-5 sm:grid-cols-2">
-        {[left, right].map((file, index) => <ToolPanel key={index} title={index === 0 ? "Original PDF" : "Revised PDF"}>
-          {file && <p className="mb-3 break-all rounded-lg border bg-background p-3 text-sm">{file.name}</p>}
+        {[left?.file, right?.file].map((file, index) => <ToolPanel key={index} stage="input" title={index === 0 ? "Original PDF" : "Revised PDF"}>
+
+          {file && <div className="mb-3"><ToolFile blob={file} name={file.name} /></div>}
           <FilePicker accept=".pdf,application/pdf" onFiles={files => choose(files, index)} action={file ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF here." disabled={busy} />
         </ToolPanel>)}
       </div>
-      <form className="mt-5 flex flex-wrap items-end gap-3" onSubmit={event => { event.preventDefault(); void run(); }}>
-        <label className="text-sm font-medium">Page number
-          <Input className="mt-2 max-w-28" type="number" min="1" value={page} disabled={busy} onChange={event => setPage(event.target.value)} />
-        </label>
-        <Button type="submit" disabled={busy || !left || !right}>{busy ? "Rendering…" : "Compare page"}</Button>
+      <form className="mt-5 max-w-3xl space-y-3" onSubmit={event => { event.preventDefault(); void run(); }}>
+        <PdfPagePicker file={pageSource?.file ?? null} total={pageSource?.pages ?? 0} value={page} onChange={setPage}
+          label="Page to compare" kind="single" disabled={busy} />
+        <Button type="submit" disabled={busy || !left || !right || !/^[1-9]\d*$/.test(page) || Number(page) > (pageSource?.pages ?? 0)}>{busy ? "Rendering…" : "Compare page"}</Button>
       </form>
       {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
       {result && <section className="mt-6">
@@ -101,8 +121,8 @@ export default function ComparePdf() {
         <p role="status" className="mt-1 mb-3 text-sm text-muted-foreground">{result.message}</p>
         <div className="grid gap-5 sm:grid-cols-2">
           {result.snapshots.map((item, index) => <ToolPanel key={index} title={index === 0 ? "Original" : "Revised"} description={item.pages + " pages"}>
-            {item.url ? <Image src={item.url} alt={(index === 0 ? "Original" : "Revised") + " page " + result.page} width={item.width} height={item.height} unoptimized className="mx-auto h-auto max-w-full border" /> :
-              <p className="text-sm text-muted-foreground">No page at this position.</p>}
+            {item.url && thumbnails ? <Image src={item.url} alt={(index === 0 ? "Original" : "Revised") + " page " + result.page} width={item.width} height={item.height} unoptimized className="mx-auto h-auto max-w-full border" /> :
+              <p className="studio-empty"><FileText size={20} aria-hidden="true" />{item.url ? "Page preview hidden." : "No page at this position."}</p>}
           </ToolPanel>)}
         </div>
       </section>}

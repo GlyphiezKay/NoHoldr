@@ -1,12 +1,15 @@
 "use client";
 
+import { PdfPagePicker } from "@/components/pdf/pdf-page-picker";
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolOutput, useToolExport } from "@/components/layout/tool-output";
 import { useState } from "react";
 import { PDFCheckBox, PDFDocument, PDFDropdown, PDFName, PDFOptionList, PDFRadioGroup, PDFTextField } from "pdf-lib";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Input } from "@/components/ui/input";
-import { downloadPdfBytes } from "@/lib/pdf-utils";
+import { pdfBytesToBlob } from "@/lib/pdf-utils";
 
 type Field = { name: string; kind: "text" | "check" | "dropdown" | "list" | "radio" | "other"; value: string; options?: string[] };
 function fieldsOf(doc: PDFDocument): Field[] {
@@ -25,6 +28,7 @@ type NewField = { name: string; kind: "text" | "check" | "dropdown"; page: numbe
 
 export default function PdfForms() {
   const [source, setSource] = useState<{ file: File; pages: number } | null>(null);
+  const output = useToolExport(source);
   const [fields, setFields] = useState<Field[]>([]);
   const [newFields, setNewFields] = useState<NewField[]>([]);
   const [draft, setDraft] = useState({ name: "", kind: "text" as NewField["kind"], page: "1", options: "", x: "36", y: "36", width: "180", height: "24" });
@@ -109,7 +113,7 @@ export default function PdfForms() {
         }
       }
       if (flatten) form.flatten();
-      downloadPdfBytes(await doc.save(), source.file.name.replace(/\.pdf$/i, "") + (flatten ? "_flattened.pdf" : "_form.pdf"));
+      output.save(pdfBytesToBlob(await doc.save()), source.file.name.replace(/\.pdf$/i, "") + (flatten ? "_flattened.pdf" : "_form.pdf"));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not save the form.");
     } finally {
@@ -125,8 +129,8 @@ export default function PdfForms() {
     <ToolWorkspace category="PDF tools" backHref="/pdf" title="PDF Forms" description="Fill existing AcroForms or add new fillable controls.">
       <div className="grid items-start gap-5 lg:grid-cols-2">
         <div className="space-y-5">
-          <ToolPanel title="Source PDF">
-            {source && <p className="mb-3 break-all text-sm font-medium">{source.file.name} · {source.pages} pages</p>}
+          <ToolPanel stage="input" title="Source PDF">
+          {source && <div className="mb-3"><ToolFile blob={source.file} name={source.file.name} detail={source.pages + " pages"} /></div>}
             <FilePicker accept=".pdf,application/pdf" action={source ? "Replace PDF" : "Choose PDF"} hint="Or drop your PDF here." disabled={busy} onFiles={read} />
           </ToolPanel>
           {source && <ToolPanel title="Existing fields" description={fields.length ? "Edit values before exporting." : "No AcroForm fields found."}>
@@ -147,7 +151,7 @@ export default function PdfForms() {
             </fieldset>
           </ToolPanel>}
         </div>
-        <ToolPanel title="Create a field" description="Position fields in points from the top-left of an unrotated page.">
+        <ToolPanel stage="settings" title="Create a field" description="Position fields in points from the top-left of an unrotated page.">
           <fieldset disabled={!source || busy} className="space-y-3">
             <label className="block text-sm font-medium">Field name<Input className="mt-1" value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
             <label className="block text-sm font-medium">Field type
@@ -156,8 +160,10 @@ export default function PdfForms() {
               </select>
             </label>
             {draft.kind === "dropdown" && <label className="block text-sm font-medium">Options, separated by commas<Input className="mt-1" value={draft.options} onChange={event => setDraft({ ...draft, options: event.target.value })} /></label>}
+            <PdfPagePicker file={source?.file ?? null} total={source?.pages ?? 0} value={draft.page} label="Page"
+              kind="single" onChange={page => setDraft(current => ({ ...current, page }))} disabled={busy} />
             <div className="grid grid-cols-2 gap-2">
-              {(["page", "x", "y", "width", "height"] as const).map(key => <label key={key} className="block text-sm font-medium capitalize">{key}
+              {(["x", "y", "width", "height"] as const).map(key => <label key={key} className="block text-sm font-medium capitalize">{key}
                 <Input type="number" className="mt-1" value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })} />
               </label>)}
             </div>
@@ -171,6 +177,7 @@ export default function PdfForms() {
           <Button className="mt-4 w-full" disabled={!source || busy || (!fields.length && !newFields.length)} onClick={save}>Save and download</Button>
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
         </ToolPanel>
+        <ToolOutput file={output.file} />
       </div>
     </ToolWorkspace>
   );

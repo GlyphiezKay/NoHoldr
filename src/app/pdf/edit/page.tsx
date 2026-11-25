@@ -1,17 +1,21 @@
 "use client";
 
+import { PdfPagePicker } from "@/components/pdf/pdf-page-picker";
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolOutput, useToolExport } from "@/components/layout/tool-output";
 import { useState } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Input } from "@/components/ui/input";
-import { downloadPdfBytes } from "@/lib/pdf-utils";
+import { pdfBytesToBlob } from "@/lib/pdf-utils";
 
 type Item = { kind: "text" | "rectangle" | "image"; page: number; x: number; y: number; width: number; height: number; value: string; color: string; image: File | null };
 
 export default function EditPdf() {
   const [source, setSource] = useState<{ file: File; pages: number } | null>(null);
+  const output = useToolExport(source);
   const [items, setItems] = useState<Item[]>([]);
   const [kind, setKind] = useState<Item["kind"]>("text");
   const [position, setPosition] = useState({ page: "1", x: "36", y: "36", width: "120", height: "24" });
@@ -82,7 +86,7 @@ export default function EditPdf() {
           page.drawImage(asset, { ...size, x, y: y + item.height - size.height });
         }
       }
-      downloadPdfBytes(await pdf.save({ updateFieldAppearances: false }), source.file.name.replace(/\.pdf$/i, "") + "_edited.pdf");
+      output.save(pdfBytesToBlob(await pdf.save({ updateFieldAppearances: false })), source.file.name.replace(/\.pdf$/i, "") + "_edited.pdf");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not write the edited PDF.");
     } finally {
@@ -94,8 +98,8 @@ export default function EditPdf() {
     <ToolWorkspace category="PDF tools" backHref="/pdf" title="Edit PDF" description="Add text, images, and shapes while preserving the original page contents.">
       <div className="grid items-start gap-5 lg:grid-cols-2">
         <div className="space-y-5">
-          <ToolPanel title="Source PDF">
-            {source && <p className="mb-3 break-all text-sm font-medium">{source.file.name} · {source.pages} pages</p>}
+          <ToolPanel stage="input" title="Source PDF">
+          {source && <div className="mb-3"><ToolFile blob={source.file} name={source.file.name} detail={source.pages + " pages"} /></div>}
             <FilePicker accept=".pdf,application/pdf" onFiles={read} action={source ? "Replace PDF" : "Choose PDF"} hint="Or drop a PDF here." disabled={busy} />
           </ToolPanel>
           {items.length > 0 && <ToolPanel title="Queued edits">
@@ -106,7 +110,7 @@ export default function EditPdf() {
             <Button className="mt-4 w-full" disabled={busy} onClick={save}>Save edited PDF</Button>
           </ToolPanel>}
         </div>
-        <ToolPanel title="New edit" description="Positions are measured in points from the top-left of an unrotated page. Use Redact PDF to remove sensitive content.">
+        <ToolPanel stage="settings" title="New edit" description="Positions are measured in points from the top-left of an unrotated page. Use Redact PDF to remove sensitive content.">
           <fieldset disabled={!source || busy} className="space-y-3">
             <label className="block text-sm font-medium">Content type
               <select className="mt-1 block h-9 w-full rounded border bg-background px-2" value={kind} onChange={event => setKind(event.target.value as Item["kind"])}>
@@ -117,8 +121,10 @@ export default function EditPdf() {
             {kind === "image" ? <label className="block text-sm font-medium">PNG or JPEG image
               <input type="file" accept="image/png,image/jpeg" className="mt-1 block w-full" onChange={event => setImage(event.target.files?.[0] ?? null)} />
             </label> : <label className="flex items-center gap-2 text-sm font-medium">Color<input type="color" value={color} onChange={event => setColor(event.target.value)} /></label>}
+            <PdfPagePicker file={source?.file ?? null} total={source?.pages ?? 0} value={position.page} label="Page"
+              kind="single" onChange={page => setPosition(current => ({ ...current, page }))} disabled={busy} />
             <div className="grid grid-cols-2 gap-2">
-              {(["page", "x", "y", "width", "height"] as const).filter(key => kind !== "text" || key !== "width").map(key =>
+              {(["x", "y", "width", "height"] as const).filter(key => kind !== "text" || key !== "width").map(key =>
                 <label key={key} className="block text-sm font-medium capitalize">{key === "height" && kind === "text" ? "Font size" : key}
                   <Input type="number" className="mt-1" value={position[key]} onChange={event => setPosition(current => ({ ...current, [key]: event.target.value }))} />
                 </label>)}
@@ -127,6 +133,7 @@ export default function EditPdf() {
           </fieldset>
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
         </ToolPanel>
+        <ToolOutput file={output.file} />
       </div>
     </ToolWorkspace>
   );

@@ -1,18 +1,20 @@
 "use client";
 
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolOutput, useToolExport } from "@/components/layout/tool-output";
 import { useState } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { FilePicker } from "@/components/ui/file-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { downloadFile } from "@/lib/download-manager";
 import { gifFile, makeImageCanvas, openLocalImage } from "@/lib/image-processing";
 
 type Frame = { id: string; file: File };
 
 export default function MakeGif() {
   const [files, setFiles] = useState<Frame[]>([]);
+  const output = useToolExport(files);
   const [width, setWidth] = useState("640");
   const [height, setHeight] = useState("480");
   const [delay, setDelay] = useState("300");
@@ -67,7 +69,7 @@ export default function MakeGif() {
       }
     }
     try {
-      downloadFile(await gifFile(frames(), ms, loop ? 0 : -1), "noholdr_animation.gif");
+      output.save(await gifFile(frames(), ms, loop ? 0 : -1), "noholdr_animation.gif");
       setStatus("Download ready.");
     } catch (reason) {
       setStatus("");
@@ -80,18 +82,19 @@ export default function MakeGif() {
   return (
     <ToolWorkspace category="Image tools" backHref="/image" title="Make Animated GIF" description="Arrange multiple images as frames and set the duration and loop behavior.">
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        <ToolPanel title="Frames" description="Frames play in the order shown. Each source uses its first image frame.">
+        <ToolPanel stage="input" title="Frames" description="Frames play in the order shown. Each source uses its first image frame.">
           <FilePicker accept="image/*" multiple action={files.length ? "Add frames" : "Choose images"} hint="Or drop two or more images here." disabled={busy} onFiles={add} />
           {files.length > 0 && <ol className="mt-3 space-y-2">
             {files.map(({ id, file }, index) => <li key={id} className="flex items-center gap-1 rounded border bg-background p-2 text-sm">
-              <span className="min-w-0 flex-1 truncate">{index + 1}. {file.name}</span>
+              <span className="shrink-0 text-sm text-muted-foreground">{index + 1}.</span>
+              <div className="min-w-0 flex-1"><ToolFile blob={file} name={file.name} /></div>
               <Button aria-label={"Move " + file.name + " up"} size="icon-sm" variant="ghost" disabled={busy || index === 0} onClick={() => move(index, -1)}><ArrowUp /></Button>
               <Button aria-label={"Move " + file.name + " down"} size="icon-sm" variant="ghost" disabled={busy || index === files.length - 1} onClick={() => move(index, 1)}><ArrowDown /></Button>
               <Button aria-label={"Remove " + file.name} size="icon-sm" variant="ghost" disabled={busy} onClick={() => setFiles(current => current.filter(item => item.id !== id))}><X /></Button>
             </li>)}
           </ol>}
         </ToolPanel>
-        <ToolPanel title="Animation settings">
+        <ToolPanel stage="settings" title="Animation settings">
           <fieldset disabled={busy} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <label className="text-sm font-medium">Width (px)<Input type="number" min="1" max="1024" className="mt-1" value={width} onChange={event => setWidth(event.target.value)} /></label>
@@ -105,6 +108,7 @@ export default function MakeGif() {
           {status && <p role="status" className="mt-3 text-sm text-muted-foreground">{status}</p>}
           {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
         </ToolPanel>
+        <ToolOutput file={output.file} />
       </div>
     </ToolWorkspace>
   );

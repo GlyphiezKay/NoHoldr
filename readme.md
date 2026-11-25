@@ -37,16 +37,17 @@ Open `/image` to find batch compression with a target size, resize, upscale, cro
 
 **Converter formats:** JPEG, PNG, WebP, BMP, GIF stills, raster-backed SVG, ICO, and AVIF. The separate GIF maker combines multiple stills into an animation. Background removal matches a chosen color, and upscaling uses browser resampling. HTML to Image accepts local markup with inline styles and embedded image data.
 
-### 🎵 Media — 6 tools
+### 🎵 Media — 7 tools
 
 | Audio | Video |
 |-------|-------|
 | Convert Audio | Convert Video |
 | Trim Audio | Compress Video |
 | Extract Audio | Trim Video |
+| | Extract Video Frame |
 
-**Audio output:** WAV (8/16/24/32-bit), OGG (Opus), WebM Audio — with sample rate, channel, and normalization controls.
-**Video output:** WebM (VP8/VP9) with bitrate, resolution, and FPS controls. Frame extraction to JPEG/PNG.
+**Audio output:** 16-bit or 24-bit PCM WAV with optional mono mix and peak normalization.
+**Video output:** WebM with VP8/VP9 and Opus, plus resolution and bitrate controls for compression. Individual frames export to JPEG or PNG.
 
 ### 🔄 Smart Convert — auto-detect & convert
 
@@ -159,7 +160,7 @@ src/
 ├── app/
 │   ├── pdf/           # PDF workspace and tools
 │   ├── image/         # Image workspace and tools
-│   ├── media/         # 6 audio & video tools
+│   ├── media/         # 7 audio & video tools
 │   ├── convert/       # Smart Convert + 4 sub-converters
 │   ├── files/         # 5 file utilities
 │   ├── data/          # 16 data & developer tools
