@@ -1,15 +1,15 @@
 "use client";
 
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Copy, Check, ArrowRightLeft, Clock } from "lucide-react";
+import { Copy, Check, ArrowRightLeft, Clock } from "lucide-react";
 
 const CopyRow = ({ label, value, copiedValue, onCopy }: { label: string; value: string; copiedValue: string | null; onCopy: (value: string) => void }) => (
-    <div className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 transition-colors">
+    <div className="flex flex-wrap items-center justify-between gap-1 py-2 px-3 rounded-lg hover:bg-muted/50 transition-colors">
         <span className="text-xs text-muted-foreground">{label}</span>
-        <button onClick={() => onCopy(value)} className="flex items-center gap-1.5 font-mono text-xs">
+        <button onClick={() => onCopy(value)} className="flex min-w-0 items-center gap-1.5 wrap-anywhere text-left font-mono text-xs">
             {value}
             {copiedValue === value ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
         </button>
@@ -17,6 +17,7 @@ const CopyRow = ({ label, value, copiedValue, onCopy }: { label: string; value: 
 );
 
 export default function TimestampPage() {
+    const [epochUnit, setEpochUnit] = useState("auto");
     const [epoch, setEpoch] = useState("");
     const [dateStr, setDateStr] = useState("");
     const [now, setNow] = useState<number | null>(null);
@@ -38,11 +39,12 @@ export default function TimestampPage() {
     const today = now === null ? null : Math.floor(new Date(now).setHours(0, 0, 0, 0) / 1000);
 
     const epochToDate = (val: string) => {
-        const num = parseInt(val);
-        if (isNaN(num)) return null;
-        // Auto-detect seconds vs milliseconds
-        const ms = num < 1e12 ? num * 1000 : num;
-        return new Date(ms);
+        if (!/^[+-]?\d+$/.test(val.trim())) return null;
+        const num = Number(val);
+        if (!Number.isSafeInteger(num)) return null;
+        const seconds = epochUnit === "seconds" || (epochUnit === "auto" && Math.abs(num) < 1e12);
+        const date = new Date(seconds ? num * 1000 : num);
+        return Number.isFinite(date.getTime()) ? date : null;
     };
 
     const dateToEpoch = (val: string) => {
@@ -84,13 +86,8 @@ export default function TimestampPage() {
     };
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Timestamp Converter</h1>
-            </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="Timestamp Converter" description="Convert calendar dates and Unix timestamps.">
+            <div className="utility-body mx-auto w-full max-w-2xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
 
             {/* Live clock */}
             <div className="border rounded-xl p-4 mb-4 text-center">
@@ -111,12 +108,18 @@ export default function TimestampPage() {
                     <ArrowRightLeft className="h-4 w-4" />Epoch → Human Date
                 </h3>
                 <Input
-                    value={epoch}
+                    aria-label="Unix timestamp" value={epoch}
                     onChange={(e) => setEpoch(e.target.value)}
                     placeholder="e.g. 1700000000 or 1700000000000"
                     className="font-mono mb-3"
                 />
 
+                <label className="mb-3 block text-sm">Input unit
+                    <select className="ml-2 rounded-lg border bg-background p-1" value={epochUnit} onChange={event => setEpochUnit(event.target.value)}>
+                        <option value="auto">Auto</option><option value="seconds">Seconds</option><option value="milliseconds">Milliseconds</option>
+                    </select>
+                </label>
+                {epoch.trim() && !parsedFromEpoch && <p role="alert" className="mb-2 text-sm text-destructive">Enter a valid Unix timestamp.</p>}
                 {parsedFromEpoch && !isNaN(parsedFromEpoch.getTime()) && (
                     <div className="border rounded-lg overflow-hidden">
                         {(() => {
@@ -195,6 +198,7 @@ export default function TimestampPage() {
             </div>
 
             <p className="text-xs text-muted-foreground text-center mt-6">All conversions happen locally</p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }

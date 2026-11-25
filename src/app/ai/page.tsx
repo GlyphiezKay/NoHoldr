@@ -1,169 +1,53 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import Link from "next/link";
+import { ExternalLink, FileText, Image, KeyRound, MessageSquare, Sparkles, Wand2 } from "lucide-react";
+import { UtilityDirectory } from "@/components/layout/utility-directory";
+import { ToolPanel } from "@/components/layout/tool-workspace";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-    ArrowLeft, Sparkles, MessageSquare, FileText, Image, Wand2,
-    Key, Shield, ExternalLink, Check, X, AlertTriangle
-} from "lucide-react";
-import { setApiKey, clearApiKey, hasApiKey, subscribeToApiKey } from "@/lib/gemini";
+import { clearApiKey, hasApiKey, setApiKey, subscribeToApiKey } from "@/lib/gemini";
+import type { DirectoryGroup } from "@/lib/tool-directory";
 
-const tools = [
-    {
-        name: "Chat",
-        description: "Conversational AI assistant",
-        href: "/ai/chat",
-        icon: MessageSquare,
-    },
-    {
-        name: "Summarize",
-        description: "Condense long text",
-        href: "/ai/summarize",
-        icon: FileText,
-    },
-    {
-        name: "Describe Image",
-        description: "AI image analysis",
-        href: "/ai/describe-image",
-        icon: Image,
-    },
-    {
-        name: "Generate Metadata",
-        description: "Titles, descriptions, keywords",
-        href: "/ai/generate-metadata",
-        icon: Wand2,
-    },
+const groups: DirectoryGroup[] = [
+  { title: "Text", icon: MessageSquare, tone: "purple", tools: [
+    { name: "Chat", description: "Ask questions and continue a conversation.", href: "/ai/chat", icon: MessageSquare },
+    { name: "Summarize", description: "Turn a longer passage into an overview.", href: "/ai/summarize", icon: FileText },
+  ] },
+  { title: "Images", icon: Image, tone: "blue", tools: [
+    { name: "Describe Image", description: "Ask Gemini what it sees in an image.", href: "/ai/describe-image", icon: Image },
+    { name: "Generate Metadata", description: "Write titles, descriptions, and keywords for images.", href: "/ai/generate-metadata", icon: Wand2 },
+  ] },
 ];
 
 export default function AIHubPage() {
-    const [apiKey, setApiKeyState] = useState("");
-    const hasKey = useSyncExternalStore(subscribeToApiKey, hasApiKey, () => false);
-    const [showKey, setShowKey] = useState(false);
+  const [key, setKey] = useState("");
+  const [show, setShow] = useState(false);
+  const [error, setError] = useState("");
+  const configured = useSyncExternalStore(subscribeToApiKey, hasApiKey, () => false);
 
-    const handleSaveKey = () => {
-        if (apiKey.trim()) {
-            setApiKey(apiKey.trim());
-            setApiKeyState("");
-        }
-    };
-
-    const handleClearKey = () => {
-        clearApiKey();
-    };
-
-    return (
-        <div className="max-w-3xl mx-auto px-4 py-6">
-            {/* Header */}
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <div>
-                    <h1 className="text-xl font-semibold flex items-center gap-2">
-                        <Sparkles className="h-5 w-5" /> AI Tools
-                    </h1>
-                    <p className="text-xs text-muted-foreground">Powered by Google Gemini</p>
-                </div>
-            </div>
-
-            {/* Privacy Notice */}
-            <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20 p-4 mb-6">
-                <div className="flex gap-3">
-                    <Shield className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
-                    <div className="text-sm">
-                        <p className="font-medium text-green-900 dark:text-green-100 mb-1">Privacy First</p>
-                        <ul className="text-green-700 dark:text-green-300 space-y-1 text-xs">
-                            <li>• All AI requests go directly from your browser to Google Gemini</li>
-                            <li>• NoHoldr does NOT proxy, inspect, or store your content</li>
-                            <li>• Your API key is stored only in your browser&apos;s localStorage</li>
-                            <li>• Your content is NOT used to train any AI models by NoHoldr</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            {/* API Key Section */}
-            <div className="rounded-xl border p-4 mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                    <Key className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium text-sm">Gemini API Key</span>
-                    {hasKey && <Check className="h-4 w-4 text-green-500 ml-auto" />}
-                </div>
-
-                {!hasKey ? (
-                    <div className="space-y-3">
-                        <Input
-                            type={showKey ? "text" : "password"}
-                            placeholder="Enter your Gemini API key"
-                            value={apiKey}
-                            onChange={(e) => setApiKeyState(e.target.value)}
-                        />
-                        <div className="flex gap-2">
-                            <Button onClick={handleSaveKey} disabled={!apiKey.trim()} className="flex-1">
-                                Save Key
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => setShowKey(!showKey)}>
-                                {showKey ? "Hide" : "Show"}
-                            </Button>
-                        </div>
-                        <a
-                            href="https://aistudio.google.com/apikey"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline flex items-center gap-1"
-                        >
-                            Get your free API key from Google AI Studio <ExternalLink className="h-3 w-3" />
-                        </a>
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">API key configured</span>
-                        <Button variant="ghost" size="sm" onClick={handleClearKey} className="ml-auto">
-                            <X className="h-4 w-4 mr-1" /> Remove
-                        </Button>
-                    </div>
-                )}
-            </div>
-
-            {/* Tools Grid */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-                {tools.map((tool) => (
-                    <Link
-                        key={tool.name}
-                        href={hasKey ? tool.href : "#"}
-                        onClick={(e) => !hasKey && e.preventDefault()}
-                        className={`flex items-center gap-3 p-4 rounded-xl border bg-card transition-all ${hasKey
-                                ? "hover:border-foreground/30 hover:shadow-sm"
-                                : "opacity-50 cursor-not-allowed"
-                            }`}
-                    >
-                        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                            <tool.icon className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                        <div>
-                            <p className="font-medium text-sm">{tool.name}</p>
-                            <p className="text-xs text-muted-foreground">{tool.description}</p>
-                        </div>
-                    </Link>
-                ))}
-            </div>
-
-            {!hasKey && (
-                <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-4">
-                    <div className="flex gap-3">
-                        <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-                        <p className="text-sm text-amber-800 dark:text-amber-200">
-                            Add your Gemini API key above to enable AI features.
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            <p className="text-xs text-muted-foreground text-center mt-8">
-                AI features are opt-in • All requests go directly to Google
-            </p>
-        </div>
-    );
+  return (
+    <UtilityDirectory tone="ai" title="AI tools" description="Chat, summarize text, or work with images using your Google Gemini API key." icon={Sparkles} groups={groups}>
+      <ToolPanel title="Google Gemini API key" description="Your key is saved in this browser. When you run an AI tool, the selected content is sent directly to Google Gemini.">
+        {configured ? <div className="flex flex-wrap items-center gap-3">
+          <p className="flex items-center gap-2 text-sm font-medium" role="status"><KeyRound size={17} aria-hidden="true" />API key configured</p>
+          <Button variant="outline" onClick={() => { try { clearApiKey(); setError(""); } catch { setError("Could not remove the API key from browser storage."); } }}>Remove key</Button>
+        </div> : <form className="max-w-2xl space-y-2" onSubmit={event => {
+          event.preventDefault();
+          if (!key.trim()) return;
+          try { setApiKey(key.trim()); setKey(""); setShow(false); setError(""); }
+          catch { setError("Could not save the API key in this browser."); }
+        }}>
+          <label htmlFor="gemini-key" className="text-sm font-medium">API key</label>
+          <div className="flex flex-wrap gap-2">
+            <Input id="gemini-key" type={show ? "text" : "password"} className="min-w-0 flex-1 basis-44" value={key} autoComplete="off" spellCheck={false} onChange={event => setKey(event.target.value)} />
+            <Button type="button" variant="outline" onClick={() => setShow(current => !current)}>{show ? "Hide" : "Show"}</Button>
+            <Button disabled={!key.trim()}>Save key</Button>
+          </div>
+        </form>}
+        {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm underline underline-offset-4">Get a key from Google AI Studio<ExternalLink size={14} aria-hidden="true" /></a>
+      </ToolPanel>
+    </UtilityDirectory>
+  );
 }

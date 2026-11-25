@@ -1,12 +1,19 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import Link from "next/link";
+import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
+import { FilePicker } from "@/components/ui/file-picker";
+import { ToolFile } from "@/components/layout/tool-file";
+import { EmptyOutput, ViewToolResult } from "@/components/layout/tool-output";
+import { useBlobUrl } from "@/components/layout/use-blob-url";
+import { useThumbnails } from "@/components/layout/thumbnail-preference";
+import { downloadFile } from "@/lib/download-manager";
+import { fileStem } from "@/lib/file-utilities";
+import { useState } from "react";
 import { recordVideo, extractVideoFrame } from "@/lib/video-utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Video as VideoIcon, Download } from "lucide-react";
+import { Download } from "lucide-react";
 
 const OUTPUT_FORMATS = [
     { value: "webm-vp9", label: "WebM (VP9)", desc: "Modern, efficient", mime: "video/webm;codecs=vp9", ext: "webm" },
@@ -23,14 +30,9 @@ const BITRATES = [
     { value: 12000000, label: "12 Mbps (HQ)" },
 ];
 
-function formatBytes(b: number) { return b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(1) + " KB" : (b / 1048576).toFixed(1) + " MB"; }
-function formatDuration(s: number) { const m = Math.floor(s / 60); return `${m}:${Math.floor(s % 60).toString().padStart(2, "0")}`; }
-
 export default function VideoConverterPage() {
     const [file, setFile] = useState<File | null>(null);
-    const [convertedUrl, setConvertedUrl] = useState<string | null>(null);
-    const [convertedSize, setConvertedSize] = useState(0);
-    const [isDragging, setIsDragging] = useState(false);
+    const [result, setResult] = useState<{ blob: Blob; name: string }>();
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [targetFormat, setTargetFormat] = useState("webm-vp9");
@@ -41,18 +43,17 @@ export default function VideoConverterPage() {
     const [fps, setFps] = useState(30);
     const [error, setError] = useState("");
 
-    const handleFile = useCallback((f: File) => {
-        if (!f.type.startsWith("video/") && !/\.(mp4|mov|avi|mkv|webm|wmv|flv)$/i.test(f.name)) return;
-        setFile(f); setConvertedUrl(null); setError("");
-        const vid = document.createElement("video");
-        vid.onloadedmetadata = () => { setDuration(vid.duration); setFrameTime(0); };
-        vid.src = URL.createObjectURL(f);
-    }, []);
+    const show = useThumbnails();
+    const sourceUrl = useBlobUrl(file);
+    const resultUrl = useBlobUrl(show ? result?.blob : undefined);
 
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault(); setIsDragging(false);
-        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-    }, [handleFile]);
+    function choose(files: File[]) {
+        setFile(files[0]);
+        setResult(undefined);
+        setDuration(0);
+        setFrameTime(0);
+        setError("");
+    }
 
     const extractFrame = (): Promise<Blob> => extractVideoFrame(file!, frameTime, targetFormat === "frame-png" ? "image/png" : "image/jpeg");
 
@@ -60,7 +61,7 @@ export default function VideoConverterPage() {
 
     const convertVideo = async () => {
         if (!file) return;
-        setIsProcessing(true); setProgress(10); setError("");
+        setIsProcessing(true); setProgress(10); setError(""); setResult(undefined);
 
         try {
             let blob: Blob;
@@ -70,147 +71,69 @@ export default function VideoConverterPage() {
             } else {
                 blob = await convertToWebm();
             }
-            setConvertedUrl(URL.createObjectURL(blob));
-            setConvertedSize(blob.size);
+            const format = OUTPUT_FORMATS.find(item => item.value === targetFormat)!;
+            setResult({ blob, name: fileStem(file.name) + "." + format.ext });
             setProgress(100);
-        } catch (e) {
-            setError((e as Error).message || "Conversion failed");
+        } catch (reason) {
+            setError(reason instanceof Error ? reason.message : "Could not convert the video.");
+        } finally {
+            setIsProcessing(false);
         }
-        setIsProcessing(false);
-    };
-
-    const download = () => {
-        if (!convertedUrl || !file) return;
-        const fmt = OUTPUT_FORMATS.find(f => f.value === targetFormat)!;
-        const a = document.createElement("a"); a.href = convertedUrl;
-        a.download = file.name.replace(/\.[^.]+$/, "." + fmt.ext); a.click();
     };
 
     const isFrame = targetFormat.startsWith("frame-");
     const isWebm = targetFormat.startsWith("webm-");
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6 border-b pb-4">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/convert"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <div>
-                    <h1 className="text-xl font-semibold">Video Converter</h1>
-                    <p className="text-sm text-muted-foreground">WebM (VP8/VP9) • Frame Extract (JPG/PNG)</p>
-                </div>
-            </div>
-
-            {/* Upload */}
-            <div
-                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors mb-4 ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-                onDrop={handleDrop}
-                onClick={() => document.getElementById("video-up")?.click()}
-            >
-                <input type="file" accept="video/*,.mp4,.mov,.avi,.mkv,.webm" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} className="hidden" id="video-up" />
-                <VideoIcon className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
-                <p className="text-sm"><span className="font-medium">Drop video</span> or click</p>
-                <p className="text-xs text-muted-foreground mt-1">MP4, MOV, AVI, MKV, WebM</p>
-            </div>
-
-            {file && (
-                <>
-                    {/* File info */}
-                    <div className="border rounded-xl p-4 mb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                                <VideoIcon className="h-5 w-5 text-blue-500" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{file.name}</p>
-                                <p className="text-xs text-muted-foreground">{formatBytes(file.size)} • {duration > 0 ? formatDuration(duration) : "..."}</p>
-                            </div>
-                            {convertedSize > 0 && <span className="text-xs text-muted-foreground">→ {formatBytes(convertedSize)}</span>}
-                        </div>
-                    </div>
-
-                    {/* Settings */}
-                    <div className="border rounded-xl p-4 mb-4 space-y-3">
-                        <div>
-                            <label className="text-xs text-muted-foreground mb-1 block">Output</label>
-                            <Select value={targetFormat} onValueChange={value => { if (convertedUrl) URL.revokeObjectURL(convertedUrl); setConvertedUrl(null); setTargetFormat(value); }} disabled={isProcessing}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {OUTPUT_FORMATS.map(f => (
-                                        <SelectItem key={f.value} value={f.value}>
-                                            <span className="font-medium">{f.label}</span>
-                                            <span className="text-xs text-muted-foreground ml-2">{f.desc}</span>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {isWebm && (
-                            <>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-xs text-muted-foreground mb-1 block">Bitrate</label>
-                                        <select value={bitrate} onChange={e => setBitrate(+e.target.value)}
-                                            className="w-full h-9 rounded-md border bg-background px-2 text-sm">
-                                            {BITRATES.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-muted-foreground mb-1 block">Resolution</label>
-                                        <select value={resolution} onChange={e => setResolution(e.target.value as typeof resolution)}
-                                            className="w-full h-9 rounded-md border bg-background px-2 text-sm">
-                                            <option value="original">Original</option>
-                                            <option value="720">720p</option>
-                                            <option value="480">480p</option>
-                                            <option value="360">360p</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-xs text-muted-foreground mb-1 block">Frame rate</label>
-                                    <div className="flex gap-1">
-                                        {[15, 24, 30, 60].map(f => (
-                                            <button key={f} onClick={() => setFps(f)}
-                                                className={`flex-1 py-1.5 text-xs rounded-md border transition-colors ${fps === f ? "bg-foreground text-background" : ""}`}>
-                                                {f} fps
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </>
-                        )}
-
-                        {isFrame && duration > 0 && (
-                            <div>
-                                <label className="text-xs text-muted-foreground">Frame at: {frameTime.toFixed(1)}s / {formatDuration(duration)}</label>
-                                <input type="range" min={0} max={duration} step={0.1} value={frameTime}
-                                    onChange={e => setFrameTime(+e.target.value)} className="w-full accent-primary" />
-                            </div>
-                        )}
-                    </div>
-
-                    {isProcessing && <Progress value={progress} className="h-2 mb-4" />}
-                    {error && <p className="text-sm text-destructive text-center mb-4">{error}</p>}
-
-                    <div className="flex gap-2">
-                        <Button onClick={convertVideo} disabled={isProcessing} className="flex-1">
-                            {isProcessing ? "Converting..." : `Convert to ${OUTPUT_FORMATS.find(f => f.value === targetFormat)?.label}`}
-                        </Button>
-                        {convertedUrl && (
-                            <Button variant="outline" onClick={download}>
-                                <Download className="h-4 w-4 mr-2" />Download
-                            </Button>
-                        )}
-                    </div>
-
-
-                </>
-            )}
-
-            <p className="text-xs text-muted-foreground text-center mt-6">Processed locally in your browser</p>
-        </div>
-    );
+        <ToolWorkspace category="Convert tools" backHref="/convert" title="Video Converter" description="Convert video to WebM or export an individual frame.">
+      <div className="studio-flow">
+        <ToolPanel stage="input" title="Source video">
+          {file && <div className="mb-3"><ToolFile blob={file} name={file.name} /></div>}
+          <FilePicker accept="video/*,.mp4,.mov,.avi,.mkv,.webm" action={file ? "Replace video" : "Choose video"}
+            hint="Or drop a video here." disabled={isProcessing} onFiles={choose} />
+          {sourceUrl && <video src={sourceUrl} controls preload="metadata" playsInline hidden={!show}
+            className="mt-3 max-h-80 w-full rounded-xl bg-black" onLoadedMetadata={event => {
+              setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0);
+            }} onError={() => setError("This browser could not read the video.")} />}
+        </ToolPanel>
+        <ToolPanel stage="settings" title="Output settings">
+          <fieldset disabled={isProcessing} className="space-y-3">
+            <label className="block text-sm font-medium">Output format
+              <Select value={targetFormat} onValueChange={setTargetFormat}><SelectTrigger aria-label="Output format" className="mt-1 w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{OUTPUT_FORMATS.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </label>
+            {isWebm && <div className="grid gap-2 sm:grid-cols-3">
+              <label className="text-sm">Resolution<select className="mt-1 block w-full rounded-lg border bg-background p-2" value={resolution} onChange={event => setResolution(event.target.value as typeof resolution)}>
+                <option value="original">Original</option>{[720,480,360].map(height => <option key={height} value={height}>{height}p</option>)}
+              </select></label>
+              <label className="text-sm">Bitrate<select className="mt-1 block w-full rounded-lg border bg-background p-2" value={bitrate} onChange={event => setBitrate(Number(event.target.value))}>
+                {BITRATES.map(rate => <option key={rate.value} value={rate.value}>{rate.label}</option>)}
+              </select></label>
+              <label className="text-sm">Frame rate<select className="mt-1 block w-full rounded-lg border bg-background p-2" value={fps} onChange={event => setFps(Number(event.target.value))}>
+                {[24,25,30,60].map(rate => <option key={rate}>{rate}</option>)}
+              </select></label>
+            </div>}
+            {isFrame && <label className="block text-sm font-medium">Frame time (s)
+              <input type="number" min={0} max={duration || undefined} step={0.001} value={frameTime} onChange={event => setFrameTime(Number(event.target.value))}
+                className="mt-1 block w-full rounded-lg border bg-background p-2" />
+            </label>}
+          </fieldset>
+          <Button className="mt-4 w-full" disabled={!file || isProcessing || (isFrame && (frameTime < 0 || (duration > 0 && frameTime >= duration)))} onClick={convertVideo}>
+            {isProcessing ? "Converting…" : isFrame ? "Extract frame" : "Convert video"}
+          </Button>
+          {isProcessing && <Progress aria-label="Conversion progress" className="mt-3" value={progress} />}
+          {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+          {result && <ViewToolResult />}
+        </ToolPanel>
+        <ToolPanel stage="result" title="Converted file">
+          {result ? <div className="space-y-3">
+            <ToolFile blob={result.blob} name={result.name} />
+            {resultUrl && result.blob.type.startsWith("video/") && <video src={resultUrl} controls playsInline preload="metadata" className="max-h-80 w-full rounded-xl bg-black" />}
+            <Button onClick={() => downloadFile(result.blob, result.name)}><Download />Download result</Button>
+          </div> : <EmptyOutput />}
+        </ToolPanel>
+      </div>
+    </ToolWorkspace>
+  );
 }

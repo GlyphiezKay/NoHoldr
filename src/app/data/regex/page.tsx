@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
+import { Fragment, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 
-interface MatchResult { match: string; index: number; groups: string[]; }
+interface MatchResult { match: string; index: number; groups: (string | undefined)[]; }
 
 export default function RegexTesterPage() {
     const [pattern, setPattern] = useState("(\\w+)@(\\w+\\.\\w+)");
@@ -15,43 +15,35 @@ export default function RegexTesterPage() {
     const [matches, setMatches] = useState<MatchResult[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
-    const [highlightedHtml, setHighlightedHtml] = useState("");
+    const [capped, setCapped] = useState(false);
 
-    const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-    const runRegex = useCallback(() => {
-        if (!pattern.trim()) { setMatches([]); setError(null); setHighlightedHtml(escapeHtml(testString)); return; }
-        try {
-            const regex = new RegExp(pattern, flags);
+    useEffect(() => {
+        let worker: Worker | undefined;
+        let deadline: ReturnType<typeof setTimeout> | undefined;
+        const timer = setTimeout(() => {
+            setMatches([]);
+            setCapped(false);
             setError(null);
-            const results: MatchResult[] = [];
-            if (flags.includes("g")) {
-                let match;
-                while ((match = regex.exec(testString)) !== null) {
-                    results.push({ match: match[0], index: match.index, groups: match.slice(1) });
-                    if (match[0].length === 0) regex.lastIndex++;
-                }
-            } else {
-                const match = regex.exec(testString);
-                if (match) results.push({ match: match[0], index: match.index, groups: match.slice(1) });
-            }
-            setMatches(results);
-            if (results.length > 0) {
-                let html = ""; let lastIndex = 0;
-                const colors = ["bg-yellow-200 dark:bg-yellow-800/60", "bg-blue-200 dark:bg-blue-800/60", "bg-green-200 dark:bg-green-800/60", "bg-pink-200 dark:bg-pink-800/60"];
-                for (let i = 0; i < results.length; i++) {
-                    const r = results[i];
-                    html += escapeHtml(testString.slice(lastIndex, r.index));
-                    html += `<mark class="${colors[i % colors.length]} px-0.5 rounded">${escapeHtml(r.match)}</mark>`;
-                    lastIndex = r.index + r.match.length;
-                }
-                html += escapeHtml(testString.slice(lastIndex));
-                setHighlightedHtml(html);
-            } else { setHighlightedHtml(escapeHtml(testString)); }
-        } catch (err) { setError((err as Error).message); setMatches([]); setHighlightedHtml(escapeHtml(testString)); }
+            if (!pattern) return;
+            worker = new Worker("/regex-worker.js");
+            const finish = (message?: string, result: MatchResult[] = [], capped = false) => {
+                worker?.terminate();
+                clearTimeout(deadline);
+                setMatches(result);
+                setCapped(capped);
+                setError(message ?? null);
+            };
+            worker.onmessage = event => finish(event.data.error, event.data.matches, event.data.capped);
+            worker.onerror = () => finish("The regex worker could not start.");
+            deadline = setTimeout(() => finish("This pattern took too long. Try a simpler pattern or shorter text."), 1500);
+            worker.postMessage({ pattern, flags, text: testString });
+        }, 150);
+        return () => {
+            clearTimeout(timer);
+            clearTimeout(deadline);
+            worker?.terminate();
+        };
     }, [pattern, flags, testString]);
-
-    useEffect(() => { const t = setTimeout(runRegex, 150); return () => clearTimeout(t); }, [runRegex]);
 
     const copyPattern = async () => { await navigator.clipboard.writeText(`/${pattern}/${flags}`); setCopied(true); setTimeout(() => setCopied(false), 1500); };
 
@@ -72,20 +64,15 @@ export default function RegexTesterPage() {
     ];
 
     return (
-        <div className="max-w-3xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Regex Tester</h1>
-            </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="Regex Tester" description="Test a regular expression and review every match.">
+            <div className="utility-body mx-auto w-full max-w-3xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
 
             <div className="border rounded-xl p-4 mb-4">
                 <div className="flex items-center gap-2 mb-3">
                     <span className="text-muted-foreground font-mono text-lg">/</span>
-                    <Input value={pattern} onChange={(e) => setPattern(e.target.value)} className="font-mono flex-1" placeholder="pattern" />
+                    <Input value={pattern} onChange={(e) => setPattern(e.target.value)} className="font-mono flex-1" aria-label="Pattern" placeholder="pattern" />
                     <span className="text-muted-foreground font-mono text-lg">/</span>
-                    <Input value={flags} onChange={(e) => setFlags(e.target.value)} className="font-mono w-16" placeholder="gi" />
+                    <Input value={flags} onChange={(e) => setFlags(e.target.value)} className="font-mono w-16" aria-label="Flags" placeholder="gi" />
                     <Button variant="ghost" size="icon" onClick={copyPattern}>
                         {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                     </Button>
@@ -98,21 +85,27 @@ export default function RegexTesterPage() {
                         </button>
                     ))}
                 </div>
-                {error && <p className="text-xs text-destructive mt-2">{error}</p>}
+                {error && <p role="alert" className="text-xs text-destructive mt-2">{error}</p>}
             </div>
 
             <div className="border rounded-xl p-4 mb-4">
                 <label className="text-sm font-medium mb-2 block">Test String</label>
-                <textarea value={testString} onChange={(e) => setTestString(e.target.value)}
+                <textarea aria-label="Test string" value={testString} onChange={(e) => setTestString(e.target.value)}
                     className="w-full h-24 p-3 text-sm font-mono bg-muted/30 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-primary/30" placeholder="Enter text to test..." />
             </div>
 
             <div className="border rounded-xl p-4 mb-4">
                 <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium">Result</label>
-                    <span className="text-xs text-muted-foreground">{matches.length} match{matches.length !== 1 ? "es" : ""}</span>
+                    <span className="text-xs text-muted-foreground">{capped ? "First " : ""}{matches.length} match{matches.length !== 1 ? "es" : ""}</span>
                 </div>
-                <div className="p-3 text-sm font-mono bg-muted/30 rounded-lg whitespace-pre-wrap break-all leading-relaxed" dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
+                <div className="p-3 text-sm font-mono bg-muted/30 rounded-lg whitespace-pre-wrap wrap-anywhere leading-relaxed">
+                    {matches.map((match, i) => <Fragment key={i}>
+                        {testString.slice(i ? matches[i - 1].index + matches[i - 1].match.length : 0, match.index)}
+                        <mark className="rounded bg-yellow-200 px-0.5 text-black dark:bg-yellow-300">{match.match || "▏"}</mark>
+                    </Fragment>)}
+                    {testString.slice(matches.length ? matches.at(-1)!.index + matches.at(-1)!.match.length : 0)}
+                </div>
             </div>
 
             {matches.length > 0 && (
@@ -146,6 +139,7 @@ export default function RegexTesterPage() {
             </div>
 
             <p className="text-xs text-muted-foreground text-center mt-6">JavaScript regex engine • Tested locally</p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }

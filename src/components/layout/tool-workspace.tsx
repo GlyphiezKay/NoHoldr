@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowDownToLine, ChevronLeft, Clapperboard, FileText, Image, Import, LockKeyhole, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { ArrowDownToLine, ArrowLeftRight, ChevronLeft, Clapperboard, Cloud, Database, FileText, FolderArchive, Image, Import, LockKeyhole, SlidersHorizontal, Sparkles, type LucideIcon } from "lucide-react";
 import { ThumbnailToggle } from "./thumbnail-preference";
 
 type WorkspaceProps = {
@@ -9,19 +9,21 @@ type WorkspaceProps = {
   title: string;
   description: string;
   children: ReactNode;
-  tone?: "pdf" | "image" | "media";
+  tone?: "pdf" | "image" | "media" | "convert" | "files" | "data" | "ai";
+  thumbnails?: boolean;
 };
 
-const workspaceIcons: Partial<Record<string, LucideIcon>> = { pdf: FileText, image: Image, media: Clapperboard };
+const workspaceIcons: Partial<Record<string, LucideIcon>> = { pdf: FileText, image: Image, media: Clapperboard, files: FolderArchive, data: Database, ai: Sparkles, convert: ArrowLeftRight };
 const stages = {
   input: { label: "Input", icon: Import },
   settings: { label: "Settings", icon: SlidersHorizontal },
   result: { label: "Output", icon: ArrowDownToLine },
 };
 
-export function ToolWorkspace({ category, backHref, title, description, children, tone }: WorkspaceProps) {
+export function ToolWorkspace({ category, backHref, title, description, children, tone, thumbnails }: WorkspaceProps) {
   const theme = tone ?? (backHref === "/" ? title.toLowerCase().split(" ")[0] : backHref.slice(1));
   const Icon = workspaceIcons[theme];
+  const showThumbnails = thumbnails ?? ["pdf", "image", "media", "convert", "files"].includes(theme);
   return (
     <main id="main-content" data-workspace={theme} className="tool-workspace mx-auto w-full max-w-[78rem] px-4 pt-5 pb-14 sm:px-7 sm:pt-8">
       <div className="tool-intro mb-6 rounded-[1.65rem] border px-5 pt-3 pb-5 sm:px-7 sm:pt-4 sm:pb-6">
@@ -37,9 +39,10 @@ export function ToolWorkspace({ category, backHref, title, description, children
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {Icon && <ThumbnailToggle />}
+            {showThumbnails && <ThumbnailToggle />}
             <span className="studio-local inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium">
-              <LockKeyhole className="size-4" aria-hidden="true" /> {Icon ? "On device" : "Runs on your device"}
+              {theme === "ai" ? <Cloud className="size-4" aria-hidden="true" /> : <LockKeyhole className="size-4" aria-hidden="true" />}
+              {theme === "ai" ? "Google Gemini" : Icon ? "On device" : "Runs on your device"}
             </span>
           </div>
         </div>

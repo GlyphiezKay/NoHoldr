@@ -1,9 +1,9 @@
 "use client";
 
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
 import { useState } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 
 export default function JSONFormatPage() {
     const [input, setInput] = useState("");
@@ -40,13 +40,8 @@ export default function JSONFormatPage() {
     };
 
     return (
-        <div className="max-w-4xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">JSON Format</h1>
-            </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="JSON Format" description="Validate, format, and minify JSON.">
+            <div className="utility-body mx-auto w-full max-w-4xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
 
             <div className="grid md:grid-cols-2 gap-4 mb-4">
                 <div>
@@ -83,6 +78,7 @@ export default function JSONFormatPage() {
             </div>
 
             <p className="text-xs text-muted-foreground text-center mt-6">Processed locally</p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }

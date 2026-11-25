@@ -1,10 +1,10 @@
 "use client";
 
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
 import { useState } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Copy, Check, RefreshCw } from "lucide-react";
+import { Copy, Check, RefreshCw } from "lucide-react";
 
 const LOREM_WORDS = [
     "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit",
@@ -62,10 +62,11 @@ export default function LoremIpsumPage() {
 
     const generate = () => {
         let result = "";
+        const amount = Math.min(count, outputType === "words" ? 500 : 50);
 
         switch (outputType) {
             case "paragraphs": {
-                const paragraphs = Array.from({ length: count }, (_, i) => {
+                const paragraphs = Array.from({ length: amount }, (_, i) => {
                     const p = generateParagraph(3 + Math.floor(Math.random() * 3));
                     if (i === 0 && startWithLorem) {
                         return "Lorem ipsum dolor sit amet, consectetur adipiscing elit. " + p;
@@ -76,7 +77,7 @@ export default function LoremIpsumPage() {
                 break;
             }
             case "sentences": {
-                const sentences = Array.from({ length: count }, (_, i) => {
+                const sentences = Array.from({ length: amount }, (_, i) => {
                     if (i === 0 && startWithLorem) {
                         return "Lorem ipsum dolor sit amet, consectetur adipiscing elit.";
                     }
@@ -86,7 +87,7 @@ export default function LoremIpsumPage() {
                 break;
             }
             case "words": {
-                const words = Array.from({ length: count }, randomWord);
+                const words = Array.from({ length: amount }, randomWord);
                 if (startWithLorem && words.length >= 2) {
                     words[0] = "lorem";
                     words[1] = "ipsum";
@@ -106,27 +107,19 @@ export default function LoremIpsumPage() {
         setTimeout(() => setCopied(false), 1500);
     };
 
-    // Auto-generate on first render
-    useState(() => { generate(); });
-
     const wordCount = output ? output.split(/\s+/).filter(Boolean).length : 0;
     const charCount = output.length;
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Lorem Ipsum Generator</h1>
-            </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="Lorem Ipsum Generator" description="Generate placeholder text by word, sentence, or paragraph.">
+            <div className="utility-body mx-auto w-full max-w-2xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
 
             {/* Type selector */}
             <div className="flex gap-1 p-1 bg-muted rounded-lg mb-4">
                 {(["paragraphs", "sentences", "words"] as OutputType[]).map((t) => (
                     <button
                         key={t}
-                        onClick={() => setOutputType(t)}
+                        onClick={() => { setOutputType(t); setCount(current => Math.min(current, t === "words" ? 500 : 50)); }}
                         className={`flex-1 py-2 px-3 text-sm rounded-md transition-colors capitalize ${outputType === t ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}
                     >
                         {t}
@@ -140,11 +133,11 @@ export default function LoremIpsumPage() {
                     <div>
                         <label className="text-xs text-muted-foreground">Count</label>
                         <Input
-                            type="number"
+                            type="number" aria-label="Amount"
                             min={1}
                             max={outputType === "words" ? 500 : 50}
                             value={count}
-                            onChange={(e) => setCount(Math.max(1, parseInt(e.target.value) || 1))}
+                            onChange={(e) => setCount(Math.min(outputType === "words" ? 500 : 50, Math.max(1, parseInt(e.target.value) || 1)))}
                         />
                     </div>
                     <div className="flex items-end">
@@ -183,6 +176,7 @@ export default function LoremIpsumPage() {
             )}
 
             <p className="text-xs text-muted-foreground text-center mt-6">Classic placeholder text for design & development</p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }

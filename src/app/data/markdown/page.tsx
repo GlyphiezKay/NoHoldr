@@ -1,9 +1,11 @@
 "use client";
 
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useState } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 
 export default function MarkdownPreviewPage() {
     const [markdown, setMarkdown] = useState(`# Hello World
@@ -46,93 +48,23 @@ function greet(name) {
         setTimeout(() => setCopied(false), 1500);
     };
 
-    // Simple markdown to HTML converter (no dependencies)
-    const toHtml = (md: string): string => {
-        let html = escapeHtml(md);
-
-        // Code blocks (fenced)
-        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang, code) =>
-            `<pre class="md-pre"><code class="md-code">${code.trim()}</code></pre>`
-        );
-
-        // Inline code
-        html = html.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
-
-        // Tables
-        html = html.replace(/^(\|.+\|)\n(\|[-: |]+\|)\n((?:\|.+\|\n?)+)/gm, (_m, header, _sep, body) => {
-            const headers = header.split("|").filter(Boolean).map((h: string) => `<th class="md-th">${h.trim()}</th>`).join("");
-            const rows = body.trim().split("\n").map((row: string) => {
-                const cells = row.split("|").filter(Boolean).map((c: string) => `<td class="md-td">${c.trim()}</td>`).join("");
-                return `<tr>${cells}</tr>`;
-            }).join("");
-            return `<table class="md-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>`;
-        });
-
-        // Headings
-        html = html.replace(/^#{6}\s+(.+)$/gm, '<h6 class="md-h6">$1</h6>');
-        html = html.replace(/^#{5}\s+(.+)$/gm, '<h5 class="md-h5">$1</h5>');
-        html = html.replace(/^#{4}\s+(.+)$/gm, '<h4 class="md-h4">$1</h4>');
-        html = html.replace(/^###\s+(.+)$/gm, '<h3 class="md-h3">$1</h3>');
-        html = html.replace(/^##\s+(.+)$/gm, '<h2 class="md-h2">$1</h2>');
-        html = html.replace(/^#\s+(.+)$/gm, '<h1 class="md-h1">$1</h1>');
-
-        // Horizontal rule
-        html = html.replace(/^---+$/gm, '<hr class="md-hr" />');
-
-        // Blockquote
-        html = html.replace(/^&gt;\s+(.+)$/gm, '<blockquote class="md-bq">$1</blockquote>');
-
-        // Bold + Italic
-        html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-
-        // External images are displayed as links to avoid automatic network requests.
-        html = html.replace(/!?\[([^\]]+)\]\(([^)]+)\)/g, (_match, label: string, url: string) => {
-            if (!/^https?:\/\//i.test(url) || /[<>\s]/.test(url)) return label;
-            return `<a href="${url}" class="md-link" target="_blank" rel="noopener noreferrer">${label}</a>`;
-        });
-
-        // Unordered lists
-        html = html.replace(/^[-*]\s+(.+)$/gm, '<li class="md-li">$1</li>');
-        html = html.replace(/((?:<li class="md-li">.*<\/li>\n?)+)/g, '<ul class="md-ul">$1</ul>');
-
-        // Ordered lists
-        html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="md-oli">$1</li>');
-        html = html.replace(/((?:<li class="md-oli">.*<\/li>\n?)+)/g, '<ol class="md-ol">$1</ol>');
-
-        // Paragraphs (remaining text blocks)
-        html = html.replace(/\n\n/g, '</p><p class="md-p">');
-        html = '<p class="md-p">' + html + '</p>';
-
-        // Clean up empty paragraphs
-        html = html.replace(/<p class="md-p">\s*<\/p>/g, '');
-        html = html.replace(/<p class="md-p">\s*(<h[1-6]|<pre|<table|<ul|<ol|<hr|<blockquote)/g, '$1');
-        html = html.replace(/(<\/h[1-6]>|<\/pre>|<\/table>|<\/ul>|<\/ol>|<hr \/>|<\/blockquote>)\s*<\/p>/g, '$1');
-
-        return html;
-    };
-
-    const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-
     const previewStyles = `
-        .md-h1 { font-size: 1.75em; font-weight: 700; margin: 0.5em 0 0.3em; border-bottom: 1px solid var(--border-color, #e5e7eb); padding-bottom: 0.2em; }
-        .md-h2 { font-size: 1.4em; font-weight: 600; margin: 0.5em 0 0.3em; border-bottom: 1px solid var(--border-color, #e5e7eb); padding-bottom: 0.2em; }
-        .md-h3 { font-size: 1.15em; font-weight: 600; margin: 0.5em 0 0.3em; }
-        .md-h4, .md-h5, .md-h6 { font-size: 1em; font-weight: 600; margin: 0.5em 0 0.3em; }
-        .md-p { margin: 0.6em 0; line-height: 1.7; }
-        .md-pre { background: #1e1e2e; color: #cdd6f4; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 0.8em 0; font-size: 0.85em; }
-        .md-code { font-family: 'Fira Code', 'Consolas', monospace; }
+        .markdown-preview h1 { font-size: 1.75em; font-weight: 700; margin: 0.5em 0 0.3em; border-bottom: 1px solid var(--border-color, #e5e7eb); padding-bottom: 0.2em; }
+        .markdown-preview h2 { font-size: 1.4em; font-weight: 600; margin: 0.5em 0 0.3em; border-bottom: 1px solid var(--border-color, #e5e7eb); padding-bottom: 0.2em; }
+        .markdown-preview h3 { font-size: 1.15em; font-weight: 600; margin: 0.5em 0 0.3em; }
+        .md-h4, .md-h5, .markdown-preview h6 { font-size: 1em; font-weight: 600; margin: 0.5em 0 0.3em; }
+        .markdown-preview p { margin: 0.6em 0; line-height: 1.7; }
+        .markdown-preview pre { background: #1e1e2e; color: #cdd6f4; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 0.8em 0; font-size: 0.85em; }
+        .markdown-preview code { font-family: 'Fira Code', 'Consolas', monospace; }
         .md-inline-code { background: rgba(100,100,100,0.15); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: 'Fira Code', 'Consolas', monospace; }
-        .md-bq { border-left: 3px solid #6366f1; padding: 8px 16px; margin: 0.8em 0; color: #666; background: rgba(99,102,241,0.05); border-radius: 0 6px 6px 0; }
-        .md-ul, .md-ol { padding-left: 1.5em; margin: 0.6em 0; }
+        .markdown-preview blockquote { border-left: 3px solid #6366f1; padding: 8px 16px; margin: 0.8em 0; color: #666; background: rgba(99,102,241,0.05); border-radius: 0 6px 6px 0; }
+        .md-ul, .markdown-preview ol { padding-left: 1.5em; margin: 0.6em 0; }
         .md-li, .md-oli { margin: 0.2em 0; }
-        .md-link { color: #6366f1; text-decoration: underline; }
-        .md-hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.2em 0; }
-        .md-table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
-        .md-th { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; font-weight: 600; background: rgba(0,0,0,0.03); }
-        .md-td { border: 1px solid #e5e7eb; padding: 8px 12px; }
+        .markdown-preview a { color: #6366f1; text-decoration: underline; }
+        .markdown-preview hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.2em 0; }
+        .markdown-preview table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+        .markdown-preview th { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; font-weight: 600; background: rgba(0,0,0,0.03); }
+        .markdown-preview td { border: 1px solid #e5e7eb; padding: 8px 12px; }
         .md-img { max-width: 100%; border-radius: 8px; margin: 0.5em 0; }
     `;
 
@@ -140,14 +72,9 @@ function greet(name) {
     const words = markdown.split(/\s+/).filter(Boolean).length;
 
     return (
-        <div className="max-w-5xl mx-auto px-4 py-6">
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                        <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                    </Button>
-                    <h1 className="text-lg font-semibold">Markdown Preview</h1>
-                </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="Markdown Preview" description="Edit Markdown and see the formatted result alongside it.">
+            <div className="utility-body mx-auto w-full max-w-5xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
+            <div className="mb-4 flex justify-end">
                 <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">{words} words • {lines} lines</span>
                     <Button variant="ghost" size="sm" onClick={copy}>
@@ -171,14 +98,14 @@ function greet(name) {
             </div>
 
             {/* Editor + Preview */}
-            <div className={`gap-4 ${view === "split" ? "grid grid-cols-2" : ""}`}>
+            <div className={`gap-4 ${view === "split" ? "grid md:grid-cols-2" : ""}`}>
                 {(view === "split" || view === "edit") && (
                     <div className="border rounded-xl overflow-hidden">
                         <textarea
                             value={markdown}
                             onChange={(e) => setMarkdown(e.target.value)}
                             className="w-full h-[65vh] p-4 text-sm font-mono bg-background resize-none focus:outline-none"
-                            placeholder="Type your markdown here..."
+                            aria-label="Markdown source" placeholder="Type your markdown here..."
                             spellCheck={false}
                         />
                     </div>
@@ -186,16 +113,20 @@ function greet(name) {
 
                 {(view === "split" || view === "preview") && (
                     <div className="border rounded-xl overflow-hidden">
-                        <style dangerouslySetInnerHTML={{ __html: previewStyles }} />
-                        <div
-                            className="p-4 h-[65vh] overflow-y-auto text-sm"
-                            dangerouslySetInnerHTML={{ __html: toHtml(markdown) }}
-                        />
+                        <style>{previewStyles}</style>
+                        <div className="markdown-preview min-h-56 max-h-[65vh] overflow-auto wrap-anywhere p-4 text-sm">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={{
+                                a: ({ href, children }) => href && /^https?:\/\//i.test(href)
+                                    ? <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> : <span>{children}</span>,
+                                img: ({ alt }) => <span className="text-muted-foreground">{alt ? "Image: " + alt : "Image"}</span>,
+                            }}>{markdown}</ReactMarkdown>
+                        </div>
                     </div>
                 )}
             </div>
 
             <p className="text-xs text-muted-foreground text-center mt-6">Rendered locally • No data sent anywhere</p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }

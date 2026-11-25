@@ -143,7 +143,7 @@
   box-shadow: 0 8px 28px -22px rgb(33 41 29 / 35%);
 }
 
-.tool-workspace:is([data-workspace="pdf"], [data-workspace="image"], [data-workspace="media"]) {
+.tool-workspace:is([data-workspace="pdf"], [data-workspace="image"], [data-workspace="media"], [data-workspace="files"], [data-workspace="data"], [data-workspace="ai"], [data-workspace="convert"]) {
   --studio-ink: #36241f;
   --studio-highlight: #f1ad9f;
 }
@@ -151,11 +151,16 @@
 .tool-workspace[data-workspace="image"] { --studio-ink: #2c2543; --studio-highlight: #c3b1fb; }
 .tool-workspace[data-workspace="media"] { --studio-ink: #1d2d49; --studio-highlight: #a9c8ff; }
 
-.tool-workspace:is([data-workspace="pdf"], [data-workspace="image"], [data-workspace="media"]) .tool-intro {
+.tool-workspace:is([data-workspace="pdf"], [data-workspace="image"], [data-workspace="media"], [data-workspace="files"], [data-workspace="data"], [data-workspace="ai"], [data-workspace="convert"]) .tool-intro {
   color: #fff;
   border-color: color-mix(in srgb, var(--studio-ink), var(--studio-highlight) 26%);
   background: radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--studio-ink), var(--studio-highlight) 25%), transparent 68%), var(--studio-ink);
 }
+
+.tool-workspace[data-workspace="convert"] { --studio-ink: #263922; --studio-highlight: #d7ee9f; }
+.tool-workspace[data-workspace="files"] { --studio-ink: #392c1b; --studio-highlight: #f5d08f; }
+.tool-workspace[data-workspace="data"] { --studio-ink: #173832; --studio-highlight: #a6e1cb; }
+.tool-workspace[data-workspace="ai"] { --studio-ink: #302341; --studio-highlight: #dec6fb; }
 
 .studio-mark {
   display: grid;
@@ -169,8 +174,7 @@
 }
 
 .studio-back, .studio-description { color: var(--muted-foreground); }
-[data-workspace="pdf"] .studio-back, [data-workspace="image"] .studio-back, [data-workspace="media"] .studio-back,
-[data-workspace="pdf"] .studio-description, [data-workspace="image"] .studio-description, [data-workspace="media"] .studio-description { color: #f0ebf2; }
+.tool-workspace:has(.studio-mark) :is(.studio-back, .studio-description) { color: #f0ebf2; }
 
 .studio-local { color: var(--foreground); background: var(--card); }
 .studio-thumbnail-toggle {
@@ -280,3 +284,6 @@
 @media (min-width: 960px) {
   .studio-flow { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
 }
+
+.utility-body :is(textarea, pre) { min-width: 0; max-width: 100%; }
+.utility-body [role="alert"] { overflow-wrap: anywhere; }

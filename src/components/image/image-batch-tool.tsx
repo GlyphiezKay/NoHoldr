@@ -162,7 +162,7 @@ export function ImageBatchTool({ mode, fromConvert = false }: { mode: ImageBatch
   }
 
   return (
-    <ToolWorkspace tone="image" category={fromConvert ? "Convert" : "Image tools"} backHref={fromConvert ? "/convert" : "/image"} title={info.title} description={info.description}>
+    <ToolWorkspace tone={fromConvert ? "convert" : "image"} category={fromConvert ? "Convert" : "Image tools"} backHref={fromConvert ? "/convert" : "/image"} title={info.title} description={info.description}>
       <div className="studio-flow">
         <ToolPanel stage="input" title="Source images" action={items.length > 0 && <Button variant="ghost" size="sm" disabled={locked} onClick={() => { setItems([]); setStatus(""); }}>Clear list</Button>}>
           <FilePicker multiple accept="image/*,.heic,.heif,.tiff" action={items.length ? "Add images" : "Choose images"} hint="Or drop image files here." disabled={locked} onFiles={add} />

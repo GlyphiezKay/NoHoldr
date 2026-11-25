@@ -16,6 +16,10 @@
   --banner: #1d2d49;
 }
 
+.directory[data-tone="files"] { --banner: #392c1b; --tint: #f5d08f; }
+.directory[data-tone="data"] { --banner: #173832; --tint: #a6e1cb; }
+.directory[data-tone="ai"] { --banner: #302341; --tint: #dec6fb; }
+
 .breadcrumb {
   display: flex;
   align-items: center;

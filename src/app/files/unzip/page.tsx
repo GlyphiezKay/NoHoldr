@@ -1,130 +1,83 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import Link from "next/link";
+import { useState } from "react";
+import JSZip, { type JSZipObject } from "jszip";
+import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, File, FolderArchive } from "lucide-react";
-import JSZip from "jszip";
-import { downloadFile as saveFile } from "@/lib/download-manager";
-
-interface ExtractedFile {
-    name: string;
-    blob: Blob;
-    size: number;
-}
+import { FilePicker } from "@/components/ui/file-picker";
+import { EmptyOutput } from "@/components/layout/tool-output";
+import { ToolFile } from "@/components/layout/tool-file";
+import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
+import { downloadFile } from "@/lib/download-manager";
+import { fileStem, safeFileName } from "@/lib/file-utilities";
 
 export default function ExtractZIPPage() {
-    const [files, setFiles] = useState<ExtractedFile[]>([]);
-    const [zipName, setZipName] = useState("");
-    const [isDragging, setIsDragging] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [error, setError] = useState("");
+  const [source, setSource] = useState<{ file: File; entries: JSZipObject[] }>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-    const handleFile = useCallback(async (file: File) => {
-        if (!/\.zip$/i.test(file.name)) { setError("Please choose a ZIP archive."); return; }
+  async function open(files: File[]) {
+    setBusy(true);
+    setError("");
+    setSource(undefined);
+    try {
+      const file = files[0];
+      const archive = await JSZip.loadAsync(file);
+      setSource({ file, entries: Object.values(archive.files).filter(entry => !entry.dir) });
+    } catch {
+      setError("Could not open this ZIP. Check that it is a valid, unencrypted archive.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
-        setIsProcessing(true);
-        setZipName(file.name);
-        setError("");
-        setFiles([]);
+  async function save(entry: JSZipObject) {
+    setBusy(true);
+    setError("");
+    try {
+      downloadFile(await entry.async("blob"), safeFileName(entry.name.split("/").at(-1) || entry.name));
+    } catch {
+      setError("Could not extract " + entry.name + ".");
+    } finally {
+      setBusy(false);
+    }
+  }
 
-        try {
-            const zip = await JSZip.loadAsync(file);
-            const extracted: ExtractedFile[] = [];
+  async function saveAll() {
+    if (!source || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const archive = new JSZip();
+      for (const entry of source.entries) archive.file(entry.name, await entry.async("uint8array"));
+      const blob = await archive.generateAsync({ type: "blob", compression: "DEFLATE" });
+      downloadFile(blob, fileStem(source.file.name) + "_extracted.zip");
+    } catch {
+      setError("Could not extract every file. Try downloading individual entries.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
-            for (const [name, zipEntry] of Object.entries(zip.files)) {
-                if (!zipEntry.dir) {
-                    const blob = await zipEntry.async("blob");
-                    extracted.push({ name, blob, size: blob.size });
-                }
-            }
-
-            setFiles(extracted);
-            if (!extracted.length) setError("This ZIP archive contains no files.");
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Could not extract ZIP archive.");
-        }
-
-        setIsProcessing(false);
-    }, []);
-
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        const file = e.dataTransfer.files[0];
-        if (file) handleFile(file);
-    }, [handleFile]);
-
-    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) handleFile(e.target.files[0]);
-    }, [handleFile]);
-
-    const downloadFile = (file: ExtractedFile) => {
-        saveFile(file.blob, file.name.split("/").pop() || file.name);
-    };
-
-    const downloadAll = async () => {
-        const zip = new JSZip();
-        files.forEach(f => zip.file(f.name, f.blob));
-        const blob = await zip.generateAsync({ type: "blob" });
-        saveFile(blob, zipName.replace(/\.zip$/i, "_extracted.zip"));
-    };
-
-    const fmt = (b: number) => b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(1) + " KB" : (b / 1048576).toFixed(1) + " MB";
-
-    return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/files"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Extract ZIP</h1>
-            </div>
-
-            {error && <p role="alert" className="text-sm text-red-600 mb-4">{error}</p>}
-            {files.length === 0 ? (
-                <div
-                    className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                    onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-                    onDrop={handleDrop}
-                    onClick={() => document.getElementById("zip-input")?.click()}
-                >
-                    <input type="file" accept=".zip" onChange={handleFileSelect} className="hidden" id="zip-input" />
-                    <FolderArchive className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm"><span className="font-medium">Drop ZIP</span> <span className="text-muted-foreground">or tap</span></p>
-                </div>
-            ) : (
-                <>
-                    <div className="flex items-center justify-between mb-4">
-                        <span className="text-sm font-medium">{zipName} • {files.length} files</span>
-                        <Button variant="ghost" size="sm" onClick={() => setFiles([])}>Change</Button>
-                    </div>
-
-                    <div className="border rounded-xl p-4 mb-4">
-                        <div className="space-y-2 max-h-64 overflow-y-auto">
-                            {files.map((f, i) => (
-                                <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm">
-                                    <File className="h-4 w-4 text-muted-foreground shrink-0" />
-                                    <span className="flex-1 truncate">{f.name}</span>
-                                    <span className="text-xs text-muted-foreground">{fmt(f.size)}</span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => downloadFile(f)}>
-                                        <Download className="h-3 w-3" />
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <Button onClick={downloadAll} className="w-full h-11">
-                        <Download className="h-4 w-4 mr-2" />Download All
-                    </Button>
-                </>
-            )}
-
-            {isProcessing && <p className="text-sm text-center mt-4">Extracting...</p>}
-
-            <p className="text-xs text-muted-foreground text-center mt-6">Processed locally</p>
-        </div>
-    );
+  return (
+    <ToolWorkspace category="Files tools" backHref="/files" title="Extract ZIP" description="Inspect the archive before downloading individual files.">
+      <div className="grid gap-5">
+        <ToolPanel stage="input" title="Source archive">
+          {source && <div className="mb-3"><ToolFile blob={source.file} name={source.file.name} detail={source.entries.length + " entries"} /></div>}
+          <FilePicker accept=".zip,application/zip" disabled={busy} action={source ? "Replace ZIP" : "Choose ZIP"} hint="Or drop a ZIP archive here." onFiles={open} />
+          {busy && <p role="status" className="mt-3 text-sm text-muted-foreground">Reading archive…</p>}
+          {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+        </ToolPanel>
+        <ToolPanel stage="result" title="Archive files" action={source && source.entries.length > 0 &&
+          <Button variant="outline" onClick={saveAll} disabled={busy}><Download />Download all as ZIP</Button>}>
+          {source?.entries.length ? <ul className="divide-y">
+            {source.entries.map(entry => <li key={entry.name} className="flex items-center justify-between gap-3 py-2">
+              <span className="min-w-0 wrap-anywhere text-sm font-medium">{entry.name}</span>
+              <Button variant="outline" size="icon" aria-label={"Download " + entry.name} disabled={busy} onClick={() => save(entry)}><Download /></Button>
+            </li>)}
+          </ul> : <EmptyOutput>{source ? "The archive is empty." : "Choose an archive to see its files here."}</EmptyOutput>}
+        </ToolPanel>
+      </div>
+    </ToolWorkspace>
+  );
 }

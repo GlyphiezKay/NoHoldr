@@ -8,16 +8,17 @@
  * - Your content is NOT collected or used by NoHoldr
  */
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type, type GenerateContentParameters, type GenerateContentResponse, type Part } from "@google/genai";
 
 const STORAGE_KEY = "noholdr_gemini_api_key";
 const KEY_CHANGE_EVENT = "noholdr:gemini-key-change";
-const MODEL = "gemini-3-flash-preview";
+export const GEMINI_MODEL = "gemini-3-flash-preview";
 
 // API Key Management
 export function getApiKey(): string | null {
     if (typeof window === "undefined") return null;
-    return localStorage.getItem(STORAGE_KEY);
+    try { return localStorage.getItem(STORAGE_KEY); }
+    catch { return null; }
 }
 
 export function setApiKey(key: string): void {
@@ -38,7 +39,7 @@ export function hasApiKey(): boolean {
 
 export function subscribeToApiKey(onChange: () => void): () => void {
     const onStorage = (event: StorageEvent) => {
-        if (event.storageArea === localStorage && (event.key === STORAGE_KEY || event.key === null)) {
+        if (event.key === STORAGE_KEY || event.key === null) {
             onChange();
         }
     };
@@ -50,91 +51,105 @@ export function subscribeToApiKey(onChange: () => void): () => void {
     };
 }
 
-// Create Gemini client
-function createClient(): GoogleGenAI | null {
-    const apiKey = getApiKey();
-    if (!apiKey) return null;
-    return new GoogleGenAI({ apiKey });
+function createClient() {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("Add your Gemini API key in AI tools first.");
+  return new GoogleGenAI({ apiKey, httpOptions: { timeout: 20_000 } });
 }
 
-// Generate text content (non-streaming)
-export async function generateText(prompt: string): Promise<string> {
-    const client = createClient();
-    if (!client) throw new Error("API key not configured");
-
-    const response = await client.models.generateContent({
-        model: MODEL,
-        contents: prompt,
-    });
-
-    return response.text || "";
-}
-
-// Generate content with system instruction
-export async function generateWithSystem(
-    systemInstruction: string,
-    prompt: string
-): Promise<string> {
-    const client = createClient();
-    if (!client) throw new Error("API key not configured");
-
-    const response = await client.models.generateContent({
-        model: MODEL,
-        config: {
-            systemInstruction: systemInstruction,
-        },
-        contents: prompt,
-    });
-
-    return response.text || "";
-}
-
-// Describe image
-export async function describeImage(
-    imageBase64: string,
-    mimeType: string,
-    prompt?: string
-): Promise<string> {
-    const client = createClient();
-    if (!client) throw new Error("API key not configured");
-
-    const response = await client.models.generateContent({
-        model: MODEL,
-        contents: [
-            {
-                role: "user",
-                parts: [
-                    {
-                        inlineData: {
-                            mimeType: mimeType,
-                            data: imageBase64,
-                        },
-                    },
-                    {
-                        text: prompt || "Describe this image in detail.",
-                    },
-                ],
-            },
-        ],
-    });
-
-    return response.text || "";
-}
-
-// Error message extraction
-export function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        // Handle common Gemini API errors
-        if (error.message.includes("API_KEY")) {
-            return "Invalid API key. Please check your Gemini API key.";
-        }
-        if (error.message.includes("QUOTA") || error.message.includes("429")) {
-            return "Rate limit exceeded. Please wait and try again.";
-        }
-        if (error.message.includes("PERMISSION")) {
-            return "Permission denied. Your API key may not have access to this model.";
-        }
-        return error.message;
+async function generate(client: GoogleGenAI, params: GenerateContentParameters) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await client.models.generateContent(params);
+    } catch (reason) {
+      const status = reason instanceof Error && "status" in reason ? Number(reason.status) : 0;
+      if (attempt >= 2 || ![500, 502, 503, 504].includes(status)) throw reason;
+      await new Promise(resolve => setTimeout(resolve, 750 * 2 ** attempt));
     }
-    return "An unexpected error occurred.";
+  }
+}
+
+function responseText(response: GenerateContentResponse) {
+  const text = response.text?.trim();
+  if (!text) throw new Error("Gemini returned no text. Try rephrasing the request.");
+  return text;
+}
+
+export async function generateChat(messages: { role: "user" | "assistant"; content: string }[]) {
+  return responseText(await generate(createClient(), {
+    model: GEMINI_MODEL,
+    contents: messages.map(message => ({ role: message.role === "user" ? "user" : "model", parts: [{ text: message.content }] })),
+  }));
+}
+
+export async function generateWithSystem(systemInstruction: string, prompt: string) {
+  return responseText(await generate(createClient(), {
+    model: GEMINI_MODEL, config: { systemInstruction }, contents: prompt,
+  }));
+}
+
+const imageTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"]);
+export const AI_IMAGE_ACCEPT = Array.from(imageTypes).join(",");
+export const AI_IMAGE_HINT = "PNG, JPEG, WebP, HEIC, or HEIF up to 12 MB.";
+
+export function validAiImage(file: File) {
+  return imageTypes.has(file.type) && file.size > 0 && file.size <= 12 * 1024 * 1024;
+}
+
+async function imagePart(file: File): Promise<Part> {
+  if (!validAiImage(file)) throw new Error(AI_IMAGE_HINT);
+  const data = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",", 2)[1]);
+    reader.onerror = () => reject(new Error("Could not read this image."));
+    reader.onabort = () => reject(new Error("Image reading was interrupted."));
+    reader.readAsDataURL(file);
+  });
+  return { inlineData: { mimeType: file.type, data } };
+}
+
+export async function describeImage(file: File, prompt: string) {
+  const client = createClient();
+  return responseText(await generate(client, {
+    model: GEMINI_MODEL, contents: [{ role: "user", parts: [await imagePart(file), { text: prompt }] }],
+  }));
+}
+
+export type ImageMetadata = { title: string; description: string; keywords: string[] };
+export async function generateImageMetadata(file: File): Promise<ImageMetadata> {
+  const client = createClient();
+  const text = responseText(await generate(client, {
+    model: GEMINI_MODEL,
+    contents: [{ role: "user", parts: [await imagePart(file), { text: "Write accurate metadata for this image. Use a title under 60 characters, a description under 160 characters, and up to 10 useful keywords." }] }],
+    config: { responseMimeType: "application/json", responseSchema: {
+      type: Type.OBJECT,
+      required: ["title", "description", "keywords"],
+      properties: {
+        title: { type: Type.STRING },
+        description: { type: Type.STRING },
+        keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+      },
+    } },
+  }));
+  const parsed: unknown = JSON.parse(text);
+  if (!parsed || typeof parsed !== "object" || !("title" in parsed) || !("description" in parsed) || !("keywords" in parsed) ||
+    typeof parsed.title !== "string" || !parsed.title.trim() || typeof parsed.description !== "string" ||
+    !Array.isArray(parsed.keywords) || !parsed.keywords.every(word => typeof word === "string")) {
+    throw new Error("Gemini returned incomplete image metadata.");
+  }
+  return { title: parsed.title.trim(), description: parsed.description.trim(), keywords: parsed.keywords };
+}
+
+export function getErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) return "The request could not finish.";
+  const status = "status" in error ? Number(error.status) : undefined;
+  if ((status === 400 && error.message.includes("API_KEY")) || status === 401) return "Check your Gemini API key in AI tools.";
+  if (status === 403) return "This API key does not have access to Gemini.";
+  if (status === 429) return "Gemini quota or rate limit reached. Try again later.";
+  if (status === 404) return "The Gemini model is unavailable for this key.";
+  if (status && status >= 500) return "Gemini is temporarily unavailable. Try again.";
+  if (status) return "Gemini rejected the request. Check the input and try again.";
+  if (error.name === "AbortError" || error.name === "TimeoutError") return "Gemini took too long to respond. Try again.";
+  if (error instanceof SyntaxError) return "Gemini returned invalid metadata. Try again.";
+  return error.message;
 }

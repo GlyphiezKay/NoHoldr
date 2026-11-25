@@ -1,9 +1,9 @@
 "use client";
 
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
 import { useState, useCallback } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check, Upload, Hash } from "lucide-react";
+import { Copy, Check, Upload, Hash } from "lucide-react";
 
 type HashAlgo = "SHA-1" | "SHA-256" | "SHA-384" | "SHA-512";
 const ALGOS: HashAlgo[] = ["SHA-1", "SHA-256", "SHA-384", "SHA-512"];
@@ -12,7 +12,7 @@ function toHex(buffer: ArrayBuffer): string {
     return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-function md5(str: string): string {
+function md5(data: Uint8Array): string {
     // Minimal MD5 implementation for completeness
     function md5cycle(x: number[], k: number[]) {
         let a = x[0], b = x[1], c = x[2], d = x[3];
@@ -49,28 +49,25 @@ function md5(str: string): string {
         x[0] = (a + x[0]) | 0; x[1] = (b + x[1]) | 0; x[2] = (c + x[2]) | 0; x[3] = (d + x[3]) | 0;
     }
 
-    function md5blk(s: string) {
-        const md5blks: number[] = [];
-        for (let i = 0; i < 64; i += 4)
-            md5blks[i >> 2] = s.charCodeAt(i) + (s.charCodeAt(i + 1) << 8) + (s.charCodeAt(i + 2) << 16) + (s.charCodeAt(i + 3) << 24);
-        return md5blks;
-    }
-
-    const n = str.length;
+    const length = data.length;
+    const view = new DataView(data.buffer, data.byteOffset, length);
     const state = [1732584193, -271733879, -1732584194, 271733878];
-    let i;
-    for (i = 64; i <= n; i += 64) md5cycle(state, md5blk(str.substring(i - 64, i)));
-    str = str.substring(i - 64);
-    const tail = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    for (i = 0; i < str.length; i++) tail[i >> 2] |= str.charCodeAt(i) << ((i % 4) << 3);
-    tail[i >> 2] |= 0x80 << ((i % 4) << 3);
-    if (i > 55) { md5cycle(state, tail); for (i = 0; i < 16; i++) tail[i] = 0; }
-    tail[14] = n * 8;
+    let offset = 0;
+    for (; offset + 64 <= length; offset += 64) {
+        md5cycle(state, Array.from({ length: 16 }, (_, word) => view.getInt32(offset + word * 4, true)));
+    }
+    const tail = Array<number>(16).fill(0);
+    const remaining = length - offset;
+    for (let index = 0; index < remaining; index++) tail[index >> 2] |= data[offset + index] << ((index % 4) * 8);
+    tail[remaining >> 2] |= 0x80 << ((remaining % 4) * 8);
+    if (remaining > 55) { md5cycle(state, tail); tail.fill(0); }
+    tail[14] = length * 8 | 0;
+    tail[15] = Math.floor(length / 2 ** 29);
     md5cycle(state, tail);
 
     const hex = "0123456789abcdef";
     let s = "";
-    for (i = 0; i < 4; i++)
+    for (let i = 0; i < 4; i++)
         for (let j = 0; j < 4; j++)
             s += hex.charAt((state[i] >> (j * 8 + 4)) & 0xf) + hex.charAt((state[i] >> (j * 8)) & 0xf);
     return s;
@@ -90,7 +87,7 @@ export default function HashGeneratorPage() {
         const encoder = new TextEncoder();
         const data = encoder.encode(text);
         const hashes: { algo: string; hash: string }[] = [
-            { algo: "MD5", hash: md5(text) },
+            { algo: "MD5", hash: md5(data) },
         ];
         for (const algo of ALGOS) {
             const buffer = await crypto.subtle.digest(algo, data);
@@ -104,10 +101,7 @@ export default function HashGeneratorPage() {
         setFileName(file.name);
         const data = new Uint8Array(await file.arrayBuffer());
         const hashes: { algo: string; hash: string }[] = [];
-        // MD5 from string
-        let s = "";
-        for (let i = 0; i < data.length; i++) s += String.fromCharCode(data[i]);
-        hashes.push({ algo: "MD5", hash: md5(s) });
+        hashes.push({ algo: "MD5", hash: md5(data) });
         for (const algo of ALGOS) {
             const buffer = await crypto.subtle.digest(algo, data);
             hashes.push({ algo, hash: toHex(buffer) });
@@ -125,17 +119,12 @@ export default function HashGeneratorPage() {
     const verifyMatch = verifyHash.trim() ? results.find(r => r.hash.toLowerCase() === verifyHash.trim().toLowerCase()) : null;
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Hash Generator</h1>
-            </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="Hash Generator" description="Calculate and verify hashes of text or files.">
+            <div className="utility-body mx-auto w-full max-w-2xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
 
             <div className="flex gap-1 p-1 bg-muted rounded-lg mb-4">
                 {(["text", "file"] as const).map(m => (
-                    <button key={m} onClick={() => { setMode(m); setResults([]); }}
+                    <button key={m} disabled={loading} aria-label={m === "text" ? "Text" : "File"} onClick={() => { setMode(m); setResults([]); }}
                         className={`flex-1 py-2 px-3 text-sm rounded-md transition-colors capitalize ${mode === m ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}>
                         {m}
                     </button>
@@ -168,7 +157,7 @@ export default function HashGeneratorPage() {
                             <div key={r.algo} className="flex items-center gap-3 px-4 py-3 border-b last:border-0 hover:bg-muted/30 transition-colors">
                                 <span className="text-xs font-medium text-muted-foreground w-16 shrink-0">{r.algo}</span>
                                 <span className="font-mono text-xs break-all flex-1">{r.hash}</span>
-                                <button onClick={() => copy(r.hash, r.algo)} className="shrink-0 text-muted-foreground hover:text-foreground">
+                                <button onClick={() => copy(r.hash, r.algo)} className="shrink-0 text-muted-foreground hover:text-foreground" aria-label={"Copy " + r.algo}>
                                     {copied === r.algo ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
                                 </button>
                             </div>
@@ -190,6 +179,7 @@ export default function HashGeneratorPage() {
             )}
 
             <p className="text-xs text-muted-foreground text-center mt-6">100% local • No data sent</p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }

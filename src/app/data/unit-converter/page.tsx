@@ -1,10 +1,9 @@
 "use client";
 
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
 import { useState, useMemo } from "react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, ArrowRightLeft, Copy, Check } from "lucide-react";
+import { ArrowRightLeft, Copy, Check } from "lucide-react";
 
 type Category = "length" | "weight" | "temperature" | "area" | "volume" | "speed" | "time" | "data";
 
@@ -159,13 +158,8 @@ export default function UnitConverterPage() {
     }, [value, from, units, category]);
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Unit Converter</h1>
-            </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="Unit Converter" description="Convert units across common measurement systems.">
+            <div className="utility-body mx-auto w-full max-w-2xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
 
             {/* Category selector */}
             <div className="flex flex-wrap gap-1.5 mb-5">
@@ -223,6 +217,7 @@ export default function UnitConverterPage() {
             )}
 
             <p className="text-xs text-muted-foreground text-center mt-6">100% local • No data sent</p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }

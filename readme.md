@@ -49,7 +49,7 @@ Open `/image` to find batch compression with a target size, resize, upscale, cro
 **Audio output:** 16-bit or 24-bit PCM WAV with optional mono mix and peak normalization.
 **Video output:** WebM with VP8/VP9 and Opus, plus resolution and bitrate controls for compression. Individual frames export to JPEG or PNG.
 
-### 🔄 Smart Convert — auto-detect & convert
+### Smart Convert
 
 Drop any file and NoHoldr detects its type, then shows available conversions:
 
@@ -65,7 +65,7 @@ Drop any file and NoHoldr detects its type, then shows available conversions:
 **Dedicated sub-converters** with advanced controls:
 - `/convert/image` — 8 output formats, quality, resize, ICO sizes, batch ZIP
 - `/convert/audio` — WAV, browser-supported Ogg or WebM, sample rate, bit depth, channels, normalization
-- `/convert/video` — Bitrate, resolution, FPS, frame extraction with time slider
+- `/convert/video` — Bitrate, resolution, FPS, and frame extraction by timestamp
 - `/convert/document` — TXT, HTML, Markdown, CSV ↔ JSON, JSON → XML
 
 ### 📁 Files — 5 tools
@@ -98,7 +98,7 @@ Drop any file and NoHoldr detects its type, then shows available conversions:
 | Describe Image | AI image analysis |
 | Generate Metadata | Titles, descriptions, keywords |
 
-> AI tools use **your own Gemini API key**. Requests go directly from your browser to Google — NoHoldr never sees your content.
+> AI tools use **your own Gemini API key** with Gemini 3 Flash Preview. Submitted text and images go directly from your browser to Google Gemini.
 
 ---
 
@@ -123,6 +123,8 @@ cd NoHoldr
 pnpm install --frozen-lockfile
 pnpm dev
 ```
+
+The category directories include search. File workspaces have dedicated input, settings, and output panels where applicable. The thumbnail preference is shared across supported workspaces and can be turned off in the header.
 
 The first run prepares the browser engines, including checksum-verified LibreOffice WASM assets. Open [NoHoldr on localhost](http://localhost:3000).
 

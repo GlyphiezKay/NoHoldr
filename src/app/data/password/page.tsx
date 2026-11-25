@@ -1,9 +1,9 @@
 "use client";
 
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
 import { useState, useCallback } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check, RefreshCw, Shield, Eye, EyeOff } from "lucide-react";
+import { Copy, Check, RefreshCw, Shield, Eye, EyeOff } from "lucide-react";
 
 const WORD_LIST = [
     "apple", "brave", "cloud", "dance", "eagle", "flame", "grape", "horse", "ivory", "jolly",
@@ -79,16 +79,19 @@ export default function PasswordGeneratorPage() {
             return Array.from({ length: pinLength }, () => randomIndex(10).toString()).join("");
         }
 
-        // Random mode
-        let chars = "";
-        if (uppercase) chars += "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        if (lowercase) chars += "abcdefghijklmnopqrstuvwxyz";
-        if (numbers) chars += "0123456789";
-        if (symbols) chars += "!@#$%^&*()_+-=[]{}|;:,.<>?";
-        if (excludeAmbiguous) chars = chars.replace(/[0OoIl1|]/g, "");
+        const sets = [
+            uppercase ? "ABCDEFGHIJKLMNOPQRSTUVWXYZ" : "",
+            lowercase ? "abcdefghijklmnopqrstuvwxyz" : "",
+            numbers ? "0123456789" : "",
+            symbols ? "!@#$%^&*()_+-=[]{}|;:,.<>?" : "",
+        ].filter(Boolean).map(set => excludeAmbiguous ? set.replace(/[0OoIl1|]/g, "") : set);
+        const chars = sets.join("");
         if (!chars) return "Enable at least one option";
-
-        return Array.from({ length }, () => chars[randomIndex(chars.length)]).join("");
+        let result: string;
+        do {
+            result = Array.from({ length }, () => chars[randomIndex(chars.length)]).join("");
+        } while (!sets.every(set => Array.from(result).some(character => set.includes(character))));
+        return result;
     }, [mode, length, uppercase, lowercase, numbers, symbols, excludeAmbiguous, wordCount, separator, capitalizeWords, addNumber, pinLength]);
 
     const generate = useCallback(() => {
@@ -131,13 +134,8 @@ export default function PasswordGeneratorPage() {
     const strength = getStrength(currentPassword);
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Password Generator</h1>
-            </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="Password Generator" description="Generate passwords, passphrases, and PINs.">
+            <div className="utility-body mx-auto w-full max-w-2xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
 
             {/* Mode selector */}
             <div className="flex gap-1 p-1 bg-muted rounded-lg mb-4">
@@ -276,7 +274,7 @@ export default function PasswordGeneratorPage() {
                     <div className="space-y-1 max-h-40 overflow-y-auto">
                         {history.slice(passwords.length).map((pwd, i) => (
                             <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50 transition-colors">
-                                <span className="font-mono text-xs truncate flex-1 mr-2">{pwd}</span>
+                                <span className="font-mono text-xs truncate flex-1 mr-2">{showPassword ? pwd : "•".repeat(Math.min(pwd.length, 30))}</span>
                                 <button onClick={() => copyText(pwd)} className="text-muted-foreground hover:text-foreground"><Copy className="h-3 w-3" /></button>
                             </div>
                         ))}
@@ -287,6 +285,7 @@ export default function PasswordGeneratorPage() {
             <p className="text-xs text-muted-foreground text-center mt-6">
                 <Shield className="h-3 w-3 inline mr-1" />Generated locally using crypto API • Never sent anywhere
             </p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }

@@ -78,3 +78,27 @@ test('PDF size targeting improves on the first result below the cap', async () =
     assert.equal(await findCompressionTarget(original, 1_300_000, encode), original);
     assert.equal((await findCompressionTarget(original, 10_000, encode)).size, 40_000);
 });
+
+test("archive filenames preserve extensions and avoid case-insensitive overwrites", async () => {
+  const { uniqueFileName } = await import("../src/lib/file-utilities.ts");
+  const used = new Set();
+  assert.equal(uniqueFileName("Report.txt", used), "Report.txt");
+  assert.equal(uniqueFileName("report.TXT", used), "report (2).TXT");
+  assert.equal(uniqueFileName("folder/report.txt", used), "folder_report.txt");
+  assert.equal(uniqueFileName(".env", used), ".env");
+});
+
+test("WAV encoding preserves frame count, PCM bit depth, and RIFF padding", async () => {
+  const { encodeWav } = await import("../src/lib/audio-export.ts");
+  const input = {
+    length: 3,
+    sampleRate: 8000,
+    numberOfChannels: 1,
+    getChannelData: () => new Float32Array([-1, 0, 1]),
+  };
+  const bytes = new Uint8Array(await encodeWav(input, { depth: 8 }).arrayBuffer());
+  const header = new DataView(bytes.buffer);
+  assert.equal(header.getUint32(4, true), 40);
+  assert.equal(header.getUint32(40, true), 3);
+  assert.deepEqual([...bytes.slice(44)], [0, 128, 255, 0]);
+});

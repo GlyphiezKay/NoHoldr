@@ -1,9 +1,9 @@
 "use client";
 
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
 import { useState, useCallback } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check, Upload, ArrowRightLeft } from "lucide-react";
+import { Copy, Check, Upload, ArrowRightLeft } from "lucide-react";
 import { encodeBase64Text, decodeBase64Text, decodeBase64Bytes } from "@/lib/base64-utils";
 import { downloadFile } from "@/lib/download-manager";
 
@@ -61,17 +61,12 @@ export default function Base64Page() {
     };
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Base64 Encoder / Decoder</h1>
-            </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="Base64 Encoder / Decoder" description="Encode or decode text and files in your browser.">
+            <div className="utility-body mx-auto w-full max-w-2xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
 
             <div className="flex gap-1 p-1 bg-muted rounded-lg mb-4">
                 {(["text", "file"] as const).map(m => (
-                    <button key={m} onClick={() => { setMode(m); setOutput(""); setError(""); }}
+                    <button key={m} aria-label={m === "text" ? "Text" : "File"} onClick={() => { setMode(m); setOutput(""); setError(""); }}
                         className={`flex-1 py-2 px-3 text-sm rounded-md transition-colors capitalize ${mode === m ? "bg-background shadow-sm font-medium" : "text-muted-foreground"}`}>
                         {m}
                     </button>
@@ -96,7 +91,7 @@ export default function Base64Page() {
                         <textarea value={input} onChange={(e) => setInput(e.target.value)}
                             rows={5} className="w-full bg-transparent resize-none outline-none font-mono text-sm" placeholder={direction === "encode" ? "Text to encode..." : "Base64 to decode..."} />
                     </div>
-                    <Button onClick={handleTextConvert} className="w-full mb-4">
+                    <Button aria-label={direction === "encode" ? "Encode to Base64" : "Decode Base64"} onClick={handleTextConvert} className="w-full mb-4">
                         <ArrowRightLeft className="h-4 w-4 mr-2" />{direction === "encode" ? "Encode" : "Decode"}
                     </Button>
                     {output && (
@@ -144,6 +139,7 @@ export default function Base64Page() {
 
             {error && <p className="text-sm text-destructive mt-3 text-center">{error}</p>}
             <p className="text-xs text-muted-foreground text-center mt-6">100% local • No data sent</p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }

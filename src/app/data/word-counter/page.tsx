@@ -1,9 +1,9 @@
 "use client";
 
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
 import { useState, useMemo } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 
 const StatCard = ({ label, value }: { label: string; value: string | number }) => (
     <div className="p-3 rounded-lg bg-muted/40 text-center">
@@ -22,7 +22,7 @@ export default function WordCounterPage() {
         const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
         const paragraphs = text.split(/\n\s*\n/).filter((p) => p.trim().length > 0);
         const lines = text.split("\n");
-        const wordSet = new Set(words.map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, "")));
+        const wordSet = new Set(words.map((w) => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "")).filter(Boolean));
         const avgLen = words.length > 0 ? words.reduce((a, w) => a + w.length, 0) / words.length : 0;
         const longest = words.reduce((a, w) => (w.length > a.length ? w : a), "");
         const readMins = words.length / 200;
@@ -47,12 +47,12 @@ export default function WordCounterPage() {
     // Top words frequency
     const topWords = useMemo(() => {
         if (!text) return [];
-        const freq: Record<string, number> = {};
+        const freq = new Map<string, number>();
         text.split(/\s+/).filter(Boolean).forEach((w) => {
-            const key = w.toLowerCase().replace(/[^a-z0-9']/g, "");
-            if (key.length > 1) freq[key] = (freq[key] || 0) + 1;
+            const key = w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
+            if (key.length > 1) freq.set(key, (freq.get(key) ?? 0) + 1);
         });
-        return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        return [...freq].sort((a, b) => b[1] - a[1]).slice(0, 10);
     }, [text]);
 
     const copyStats = async () => {
@@ -63,13 +63,8 @@ export default function WordCounterPage() {
     };
 
     return (
-        <div className="max-w-3xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <h1 className="text-lg font-semibold">Word Counter</h1>
-            </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="Word Counter" description="Measure words, characters, lines, and reading time.">
+            <div className="utility-body mx-auto w-full max-w-3xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
 
             <textarea
                 value={text}
@@ -118,6 +113,7 @@ export default function WordCounterPage() {
             </Button>
 
             <p className="text-xs text-muted-foreground text-center mt-6">Words at 200 wpm reading • 130 wpm speaking</p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }

@@ -1,17 +1,25 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Link from "next/link";
+import { ToolFile } from "@/components/layout/tool-file";
+import { EmptyOutput, ViewToolResult } from "@/components/layout/tool-output";
+import { downloadFile, downloadAsZip } from "@/lib/download-manager";
+import { openLocalImage, makeImageCanvas, encodeCanvas } from "@/lib/image-processing";
+import { openPdf, renderPdfCanvas } from "@/lib/pdf-render";
+import { fileStem } from "@/lib/file-utilities";
+import { officeToPdf } from "@/lib/office-pdf";
+import { exportWav } from "@/lib/audio-export";
 import { ToolPanel, ToolWorkspace } from "@/components/layout/tool-workspace";
 import { FilePicker } from "@/components/ui/file-picker";
 import { csvToJSON, jsonToCSV } from "@/lib/csv-utils";
 import { recordVideo, extractVideoFrame as readVideoFrame } from "@/lib/video-utils";
 import {
-    Upload, FileText, Image, Music, Video, FileArchive, Database,
-    AlertCircle, Download, Loader2
+    FileText, Image, Music, Video, Database, Download, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { detectFileType, formatFileSize, type DetectedFile, type FileCategory } from "@/lib/file-detector";
+import { detectFileType, type DetectedFile, type FileCategory } from "@/lib/file-detector";
 
 interface TargetFormat {
     id: string;
@@ -26,22 +34,6 @@ interface FormatGroup {
     icon: typeof Image;
     formats: TargetFormat[];
 }
-
-const CATEGORY_ICONS: Record<FileCategory, typeof Image> = {
-    image: Image, pdf: FileText, document: FileText, audio: Music,
-    video: Video, archive: FileArchive, data: Database, unsupported: AlertCircle,
-};
-
-const CATEGORY_COLORS: Record<FileCategory, string> = {
-    image: "text-blue-500 bg-blue-50 dark:bg-blue-950/30",
-    pdf: "text-red-500 bg-red-50 dark:bg-red-950/30",
-    document: "text-purple-500 bg-purple-50 dark:bg-purple-950/30",
-    audio: "text-green-500 bg-green-50 dark:bg-green-950/30",
-    video: "text-orange-500 bg-orange-50 dark:bg-orange-950/30",
-    archive: "text-amber-500 bg-amber-50 dark:bg-amber-950/30",
-    data: "text-cyan-500 bg-cyan-50 dark:bg-cyan-950/30",
-    unsupported: "text-gray-500 bg-gray-50 dark:bg-gray-950/30",
-};
 
 const IMAGE_FORMATS: TargetFormat[] = [
     { id: "jpg", format: "JPG", description: "Lossy, smaller size", mimeType: "image/jpeg", extension: "jpg" },
@@ -130,10 +122,10 @@ export default function SmartConvertPage() {
             if (detectedFile.category === "image") {
                 if (["jpg", "png", "webp", "avif", "bmp", "gif", "ico"].includes(selectedFormat.id)) {
                     const blob = await convertImage(file, selectedFormat.mimeType);
-                    results.push({ name: file.name.replace(/\.[^.]+$/, `.${selectedFormat.extension}`), blob });
+                    results.push({ name: fileStem(file.name) + `.${selectedFormat.extension}`, blob });
                 } else if (selectedFormat.id === "pdf") {
                     const blob = await imageToPdf(file);
-                    results.push({ name: file.name.replace(/\.[^.]+$/, ".pdf"), blob });
+                    results.push({ name: fileStem(file.name) + ".pdf", blob });
                 }
             }
             // PDF to Image
@@ -146,30 +138,30 @@ export default function SmartConvertPage() {
             }
             // Document to PDF
             else if (detectedFile.category === "document" && selectedFormat.id === "pdf") {
-                const blob = await documentToPdf(file);
-                results.push({ name: file.name.replace(/\.[^.]+$/, ".pdf"), blob });
-                setWarning("Layout may differ from original. Complex formatting, fonts, and images may not render perfectly.");
+                const blob = await officeToPdf(file, "word", setWarning);
+                results.push({ name: fileStem(file.name) + ".pdf", blob });
+                setWarning(null);
             }
             // Audio conversion
-            else if (detectedFile.category === "audio" && ["wav", "ogg", "webm-audio"].includes(selectedFormat.id)) {
-                const blob = await convertAudioToWav(file);
-                results.push({ name: file.name.replace(/\.[^.]+$/, `.${selectedFormat.extension}`), blob });
+            else if (detectedFile.category === "audio" && selectedFormat.id === "wav") {
+                const blob = await exportWav(file, { start: 0, depth: 16, mono: false, normalize: false });
+                results.push({ name: fileStem(file.name) + `.${selectedFormat.extension}`, blob });
             }
             // Video to WebM
             else if (detectedFile.category === "video" && ["webm-vp9", "webm-vp8"].includes(selectedFormat.id)) {
                 setWarning("Video transcoding is resource-intensive. This may take a while.");
                 const blob = await convertVideoToWebm(file, selectedFormat.id);
-                results.push({ name: file.name.replace(/\.[^.]+$/, ".webm"), blob });
+                results.push({ name: fileStem(file.name) + ".webm", blob });
             }
             // Video to Image (frame extraction)
             else if (detectedFile.category === "video" && ["frame-jpg", "frame-png"].includes(selectedFormat.id)) {
                 const blob = await extractVideoFrame(file, selectedFormat.mimeType);
-                results.push({ name: file.name.replace(/\.[^.]+$/, `-frame.${selectedFormat.extension}`), blob });
+                results.push({ name: fileStem(file.name) + `-frame.${selectedFormat.extension}`, blob });
             }
             // Data conversions
             else if (detectedFile.category === "data") {
                 const blob = await convertData(file, selectedFormat.id);
-                results.push({ name: file.name.replace(/\.[^.]+$/, `.${selectedFormat.extension}`), blob });
+                results.push({ name: fileStem(file.name) + `.${selectedFormat.extension}`, blob });
             }
             else {
                 throw new Error("Conversion not supported");
@@ -186,176 +178,55 @@ export default function SmartConvertPage() {
 
     // === Conversion Functions ===
 
-    const convertImage = async (file: File, targetMime: string): Promise<Blob> => {
-        return new Promise((resolve, reject) => {
-            const img = new window.Image();
-            img.onload = () => {
-                setProgress(50);
-                const canvas = document.createElement("canvas");
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext("2d");
-                if (!ctx) { reject(new Error("Canvas error")); return; }
-                ctx.drawImage(img, 0, 0);
-                setProgress(80);
-                canvas.toBlob((blob) => blob && blob.type === targetMime ? resolve(blob) : reject(new Error("Output format is unsupported by this browser")), targetMime, 0.92);
-            };
-            img.onerror = () => reject(new Error("Failed to load image"));
-            img.src = URL.createObjectURL(file);
-        });
-    };
-
-    const imageToPdf = async (file: File): Promise<Blob> => {
-        const { PDFDocument } = await import("pdf-lib");
-        const img = new window.Image();
-        await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(); img.src = URL.createObjectURL(file); });
-        setProgress(40);
-        const pdfDoc = await PDFDocument.create();
-        const page = pdfDoc.addPage([img.width, img.height]);
-        setProgress(60);
-        const imageBytes = await file.arrayBuffer();
-        const pdfImage = file.type === "image/png" ? await pdfDoc.embedPng(imageBytes) : await pdfDoc.embedJpg(imageBytes);
-        page.drawImage(pdfImage, { x: 0, y: 0, width: img.width, height: img.height });
-        setProgress(80);
-        const pdfBytes = await pdfDoc.save();
-        return new Blob([new Uint8Array(pdfBytes).buffer], { type: "application/pdf" });
-    };
-
-    const pdfToImages = async (file: File, mimeType: string, ext: string): Promise<{ name: string; blob: Blob }[]> => {
-        const { pdfjsLib } = await import("@/lib/pdfjs-setup");
-
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const results: { name: string; blob: Blob }[] = [];
-        const baseName = file.name.replace(/\.pdf$/i, "");
-
-        for (let i = 1; i <= pdf.numPages; i++) {
-            setProgress(10 + (80 * i / pdf.numPages));
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 2 }); // 2x for quality
-            const canvas = document.createElement("canvas");
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            const ctx = canvas.getContext("2d")!;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
-
-            const blob = await new Promise<Blob>((res, rej) => {
-                canvas.toBlob((b) => b && b.type === mimeType ? res(b) : rej(new Error("Output format is unsupported by this browser")), mimeType, 0.92);
-            });
-            results.push({ name: `${baseName}-page${i}.${ext}`, blob });
-        }
-        return results;
-    };
-
-    const documentToPdf = async (file: File): Promise<Blob> => {
-        const mammoth = await import("mammoth");
-        const { PDFDocument, rgb, StandardFonts } = await import("pdf-lib");
-
-        setProgress(20);
-        const arrayBuffer = await file.arrayBuffer();
-        const result = await mammoth.convertToHtml({ arrayBuffer });
-        const html = result.value;
-
-        setProgress(40);
-        // Parse HTML to extract text
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-        const textContent = doc.body.innerText || doc.body.textContent || "";
-        const paragraphs = textContent.split("\n").filter(p => p.trim());
-
-        setProgress(60);
-        const pdfDoc = await PDFDocument.create();
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const fontSize = 12;
-        const margin = 50;
-        const lineHeight = fontSize * 1.5;
-
-        let page = pdfDoc.addPage([612, 792]); // Letter size
-        let y = 792 - margin;
-
-        for (const para of paragraphs) {
-            const words = para.split(" ");
-            let line = "";
-
-            for (const word of words) {
-                const testLine = line ? `${line} ${word}` : word;
-                const width = font.widthOfTextAtSize(testLine, fontSize);
-
-                if (width > 612 - 2 * margin) {
-                    if (y < margin + lineHeight) {
-                        page = pdfDoc.addPage([612, 792]);
-                        y = 792 - margin;
-                    }
-                    page.drawText(line, { x: margin, y, size: fontSize, font, color: rgb(0, 0, 0) });
-                    y -= lineHeight;
-                    line = word;
-                } else {
-                    line = testLine;
-                }
-            }
-
-            if (line) {
-                if (y < margin + lineHeight) {
-                    page = pdfDoc.addPage([612, 792]);
-                    y = 792 - margin;
-                }
-                page.drawText(line, { x: margin, y, size: fontSize, font, color: rgb(0, 0, 0) });
-                y -= lineHeight * 1.5; // Paragraph spacing
-            }
-        }
-
-        setProgress(90);
-        const pdfBytes = await pdfDoc.save();
-        return new Blob([new Uint8Array(pdfBytes).buffer], { type: "application/pdf" });
-    };
-
-    const convertAudioToWav = async (file: File): Promise<Blob> => {
-        const audioContext = new AudioContext();
-        const arrayBuffer = await file.arrayBuffer();
-        setProgress(30);
+    async function convertImage(file: File, mimeType: string) {
+        const image = await openLocalImage(file);
+        const { canvas, context } = makeImageCanvas(image.naturalWidth, image.naturalHeight);
         try {
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            setProgress(60);
-            const wavBuffer = audioBufferToWav(audioBuffer);
-            setProgress(90);
-            return new Blob([wavBuffer], { type: "audio/wav" });
-        } finally {
-            await audioContext.close();
-        }
-    };
-
-    const audioBufferToWav = (buffer: AudioBuffer): ArrayBuffer => {
-        const numChannels = buffer.numberOfChannels;
-        const sampleRate = buffer.sampleRate;
-        const bitDepth = 16;
-        const bytesPerSample = bitDepth / 8;
-        const blockAlign = numChannels * bytesPerSample;
-        const samples = buffer.length;
-        const dataSize = samples * blockAlign;
-        const bufferSize = 44 + dataSize;
-        const arrayBuffer = new ArrayBuffer(bufferSize);
-        const view = new DataView(arrayBuffer);
-        const writeString = (offset: number, str: string) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
-        writeString(0, "RIFF"); view.setUint32(4, bufferSize - 8, true); writeString(8, "WAVE"); writeString(12, "fmt ");
-        view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, numChannels, true);
-        view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * blockAlign, true);
-        view.setUint16(32, blockAlign, true); view.setUint16(34, bitDepth, true); writeString(36, "data"); view.setUint32(40, dataSize, true);
-        const channels: Float32Array[] = []; for (let i = 0; i < numChannels; i++) channels.push(buffer.getChannelData(i));
-        let offset = 44;
-        for (let i = 0; i < samples; i++) {
-            for (let ch = 0; ch < numChannels; ch++) {
-                const sample = Math.max(-1, Math.min(1, channels[ch][i]));
-                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-                offset += 2;
+            if (mimeType === "image/jpeg") {
+                context.fillStyle = "#fff";
+                context.fillRect(0, 0, canvas.width, canvas.height);
             }
+            context.drawImage(image, 0, 0);
+            return await encodeCanvas(canvas, mimeType, 0.92);
+        } finally {
+            canvas.width = canvas.height = 0;
         }
-        return arrayBuffer;
-    };
+    }
+
+    async function imageToPdf(file: File) {
+        const { PDFDocument } = await import("pdf-lib");
+        const image = await convertImage(file, "image/png");
+        const document = await PDFDocument.create();
+        const asset = await document.embedPng(await image.arrayBuffer());
+        document.addPage([asset.width, asset.height]).drawImage(asset, { x: 0, y: 0 });
+        return new Blob([new Uint8Array(await document.save()).buffer], { type: "application/pdf" });
+    }
+
+    async function pdfToImages(file: File, mimeType: string, ext: string) {
+        const task = await openPdf(file);
+        try {
+            const pdf = await task.promise;
+            const files: { name: string; blob: Blob }[] = [];
+            for (let number = 1; number <= pdf.numPages; number++) {
+                const page = await pdf.getPage(number);
+                const { canvas } = await renderPdfCanvas(page, 4096);
+                try {
+                    files.push({ name: `${fileStem(file.name)}-page${number}.${ext}`, blob: await encodeCanvas(canvas, mimeType, 0.92) });
+                    setProgress(10 + (80 * number / pdf.numPages));
+                } finally {
+                    canvas.width = canvas.height = 0;
+                    page.cleanup();
+                }
+            }
+            return files;
+        } finally {
+            await task.destroy().catch(() => {});
+        }
+    }
 
     const convertVideoToWebm = (file: File, codec: string): Promise<Blob> => recordVideo(file, { mimeType: codec === "webm-vp8" ? "video/webm;codecs=vp8,opus" : "video/webm;codecs=vp9,opus", onProgress: p => setProgress(10 + p * 0.8) });
 
-    const extractVideoFrame = (file: File, targetMime: string): Promise<Blob> => readVideoFrame(file, 1, targetMime);
+    const extractVideoFrame = (file: File, targetMime: string): Promise<Blob> => readVideoFrame(file, 0, targetMime);
 
     const convertData = async (file: File, targetId: string): Promise<Blob> => {
         const text = await file.text();
@@ -371,20 +242,14 @@ export default function SmartConvertPage() {
         return new Blob([result], { type: targetId === "json" ? "application/json" : "text/csv" });
     };
 
-    const downloadBlob = (name: string, blob: Blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = name;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-    };
-
-    const downloadAllAsZip = async () => {
-        const { downloadAsZip } = await import("@/lib/download-manager");
-        const baseName = detectedFile?.file.name.replace(/\.[^.]+$/, "") || "converted";
-        await downloadAsZip(convertedBlobs, `${baseName}_converted.zip`);
-    };
+    async function downloadAllAsZip() {
+        if (!detectedFile) return;
+        try {
+            await downloadAsZip(convertedBlobs, fileStem(detectedFile.file.name) + "_converted.zip");
+        } catch {
+            setError("Could not package the results. Download the files individually.");
+        }
+    }
 
     const formatGroups = detectedFile ? (CATEGORY_FORMAT_GROUPS[detectedFile.category] || []).map(group => ({
         ...group,
@@ -394,22 +259,17 @@ export default function SmartConvertPage() {
             return true;
         }),
     })).filter(group => group.formats.length > 0) : [];
-    const CategoryIcon = detectedFile ? CATEGORY_ICONS[detectedFile.category] : Upload;
+
 
     return (
-      <ToolWorkspace category="All tools" backHref="/" title="Smart Convert" description="Pick a file to see formats that can be generated for it.">
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-          <ToolPanel title="Source file" description="Choose one file at a time."
+      <ToolWorkspace tone="convert" category="All tools" backHref="/" title="Smart Convert" description="Pick a file to see formats that can be generated for it.">
+        <nav aria-label="Dedicated converters" className="mb-5 flex flex-wrap gap-2">
+          {["image", "audio", "video", "document"].map(type => <Button key={type} asChild variant="outline" className="capitalize"><Link href={"/convert/" + type}>{type} converter</Link></Button>)}
+        </nav>
+        <div className="studio-flow">
+          <ToolPanel stage="input" title="Source file" description="Choose one file at a time."
             action={detectedFile && <Button variant="ghost" size="sm" disabled={isConverting} onClick={clearFile}>Remove file</Button>}>
-            {detectedFile && (
-              <div className={`mb-4 flex items-center gap-3 rounded-xl border p-3 ${CATEGORY_COLORS[detectedFile.category]}`}>
-                <CategoryIcon className="size-6 shrink-0" aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="break-all text-sm font-semibold">{detectedFile.file.name}</p>
-                  <p className="text-sm">{detectedFile.displayType} · {formatFileSize(detectedFile.file.size)}</p>
-                </div>
-              </div>
-            )}
+            {detectedFile && <div className="mb-4"><ToolFile blob={detectedFile.file} name={detectedFile.file.name} detail={detectedFile.displayType} /></div>}
             <FilePicker action={detectedFile ? "Replace file" : "Choose file"} hint="Or drop a file here." disabled={isConverting}
               onFiles={files => {
                 if (files.length > 1) { setError("Choose one file at a time."); return; }
@@ -418,15 +278,14 @@ export default function SmartConvertPage() {
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">Try an image, PDF, DOCX, audio, video, CSV, or JSON file.</p>
           </ToolPanel>
 
-          <div className="min-w-0 space-y-5">
-            <ToolPanel title="Output format" description={detectedFile ? "Select a format and run the conversion." : "Add a source file to see its available formats."}>
+            <ToolPanel stage="settings" title="Output format" description={detectedFile ? "Select a format and run the conversion." : "Add a source file to see its available formats."}>
               {detectedFile && formatGroups.length === 0 && <p role="status" className="rounded-xl bg-accent p-3 text-sm">No conversion is available for this file type. Try a different source file.</p>}
               {formatGroups.length > 0 && (
                 <div className="space-y-4">
                   {formatGroups.map(group => (
                     <fieldset key={group.name}>
                       <legend className="mb-2 text-sm font-semibold">{group.name}</legend>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         {group.formats.map(format => (
                           <label key={format.id} className="relative block cursor-pointer rounded-xl border p-3 has-checked:border-primary has-checked:bg-accent has-focus-visible:outline-2 has-disabled:cursor-not-allowed">
                             <input className="sr-only" type="radio" name="format" value={format.id} checked={selectedFormat?.id === format.id}
@@ -446,23 +305,17 @@ export default function SmartConvertPage() {
               {isConverting && <Progress aria-label="Conversion progress" value={progress} className="mt-4" />}
               {warning && <p role="status" className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">{warning}</p>}
               {error && <p role="alert" className="mt-4 text-sm text-destructive">{error}</p>}
+              {convertedBlobs.length > 0 && <ViewToolResult />}
             </ToolPanel>
-
-            {convertedBlobs.length > 0 && (
-              <ToolPanel title="Results" description="Download your files, or select another format to convert the same source again.">
-                <div className="space-y-2">
-                  {convertedBlobs.length > 1 && (
-                    <Button onClick={downloadAllAsZip} className="w-full"><Download /> Download as ZIP ({convertedBlobs.length} files)</Button>
-                  )}
-                  {convertedBlobs.map((item, index) => (
-                    <Button key={index} onClick={() => downloadBlob(item.name, item.blob)} variant="outline" className="w-full min-w-0 justify-start">
-                      <Download /><span className="truncate" title={item.name}>{item.name}</span>
-                    </Button>
-                  ))}
-                </div>
-              </ToolPanel>
-            )}
-          </div>
+            <ToolPanel stage="result" title="Results" action={convertedBlobs.length > 1 &&
+              <Button variant="outline" onClick={downloadAllAsZip}><Download />Download ZIP</Button>}>
+              {convertedBlobs.length ? <ul className="grid gap-2 sm:grid-cols-2">
+                {convertedBlobs.map(item => <li key={item.name} className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1"><ToolFile blob={item.blob} name={item.name} /></div>
+                  <Button variant="outline" size="icon" aria-label={"Download " + item.name} onClick={() => downloadFile(item.blob, item.name)}><Download /></Button>
+                </li>)}
+              </ul> : <EmptyOutput />}
+            </ToolPanel>
         </div>
       </ToolWorkspace>
     );

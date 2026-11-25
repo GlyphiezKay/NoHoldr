@@ -1,9 +1,9 @@
 "use client";
 
+import { ToolWorkspace } from "@/components/layout/tool-workspace";
 import { useState } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 
 type DiffPart = { type: "same" | "add" | "remove"; text: string };
 
@@ -15,7 +15,8 @@ function diffWords(original: string, modified: string): DiffPart[] {
     // Build LCS table
     const m = words1.length;
     const n = words2.length;
-    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+    if ((m + 1) * (n + 1) > 4_000_000) throw new Error("These texts are too large to compare together. Compare smaller sections.");
+    const dp = Array.from({ length: m + 1 }, () => new Uint32Array(n + 1));
 
     for (let i = 1; i <= m; i++) {
         for (let j = 1; j <= n; j++) {
@@ -63,11 +64,13 @@ export default function TextDiffPage() {
     const [text1, setText1] = useState("");
     const [text2, setText2] = useState("");
     const [diff, setDiff] = useState<DiffPart[]>([]);
+    const [error, setError] = useState("");
     const [copied, setCopied] = useState(false);
 
     const compare = () => {
-        const result = diffWords(text1, text2);
-        setDiff(result);
+        setError("");
+        try { setDiff(diffWords(text1, text2)); }
+        catch (reason) { setDiff([]); setError(reason instanceof Error ? reason.message : "Could not compare the texts."); }
     };
 
     const copyDiff = async () => {
@@ -89,17 +92,10 @@ export default function TextDiffPage() {
     };
 
     return (
-        <div className="max-w-4xl mx-auto px-4 py-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href="/data"><ArrowLeft className="h-4 w-4" /></Link>
-                </Button>
-                <div>
-                    <h1 className="text-lg font-semibold">Text Diff</h1>
-                    <p className="text-xs text-muted-foreground">Word-level comparison</p>
-                </div>
-            </div>
+        <ToolWorkspace category="Data tools" backHref="/data" title="Text Diff" description="Compare two texts and inspect additions and removals.">
+            <div className="utility-body mx-auto w-full max-w-4xl min-w-0 rounded-2xl border bg-card p-4 sm:p-5">
 
+            {error && <p role="alert" className="mb-3 text-sm text-destructive">{error}</p>}
             <div className="grid md:grid-cols-2 gap-4 mb-4">
                 <div>
                     <label className="text-sm font-medium mb-2 block">Original Text</label>
@@ -188,6 +184,7 @@ export default function TextDiffPage() {
             <p className="text-xs text-muted-foreground text-center mt-6">
                 Word-level comparison • Processed locally
             </p>
-        </div>
+            </div>
+        </ToolWorkspace>
     );
 }
