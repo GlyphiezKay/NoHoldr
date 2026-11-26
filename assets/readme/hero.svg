@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="330" viewBox="0 0 1200 330"
+     role="img" aria-labelledby="title description">
+  <title id="title">NoHoldr</title>
+  <desc id="description">A browser-based file toolbox. A PDF selection diagram shows page 4 followed by page 2 in the exported document.</desc>
+  <defs>
+    <linearGradient id="surface" x2="1" y2="1">
+      <stop stop-color="#192218"/>
+      <stop offset="1" stop-color="#2b3926"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="330" rx="32" fill="url(#surface)"/>
+  <path d="M663 40v250" stroke="#4b5a40"/>
+
+  <g id="wordmark" font-family="system-ui, Segoe UI, sans-serif">
+    <rect x="65" y="52" width="57" height="57" rx="15" fill="#d8fb46"/>
+    <g fill="none" stroke="#1b2213" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="80" y="68" width="27" height="25" rx="3"/>
+      <path d="M80 76h27m-17 0v17"/>
+    </g>
+    <text x="65" y="202" fill="#f5f8ee" font-size="100" font-weight="750" letter-spacing="-7">NoHoldr</text>
+    <text x="69" y="256" fill="#d8fb46" font-size="29" font-weight="620">Your files. Your browser.</text>
+  </g>
+
+  <g id="page-selection" font-family="system-ui, Segoe UI, sans-serif">
+    <text x="716" y="79" fill="#d6dfcd" font-size="21" font-weight="650">Extract PDF pages</text>
+    <g transform="translate(716 112)">
+      <rect width="95" height="125" rx="12" fill="#252e22" stroke="#9aaa88"/>
+      <path d="M24 42h47M24 55h32" stroke="#9aaa88" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M24 75h46v24H24z" fill="#879a76" opacity=".35"/>
+      <text x="15" y="28" fill="#f2f6ed" font-size="21" font-weight="650">4</text>
+    </g>
+    <g transform="translate(823 112)">
+      <rect width="95" height="125" rx="12" fill="#252e22" stroke="#9aaa88"/>
+      <path d="M24 42h47M24 55h32" stroke="#9aaa88" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M24 75h46v24H24z" fill="#879a76" opacity=".35"/>
+      <text x="15" y="28" fill="#f2f6ed" font-size="21" font-weight="650">2</text>
+    </g>
+    <path d="M936 174h42m-10-10 10 10-10 10" fill="none" stroke="#d8fb46" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="1012" y="120" width="98" height="126" rx="12" fill="#35462a" stroke="#81965e"/>
+    <rect x="1000" y="108" width="98" height="126" rx="12" fill="#d8fb46"/>
+    <path d="M1024 191h48m-48 13h32" stroke="#4c601d" stroke-width="2.5" stroke-linecap="round"/>
+    <text x="1049" y="152" text-anchor="middle" fill="#1b2213" font-size="23" font-weight="750">PDF</text>
+    <text x="1049" y="178" text-anchor="middle" fill="#344216" font-size="19" font-weight="600">4 → 2</text>
+    <text x="716" y="278" fill="#d6dfcd" font-size="19">Choose pages</text>
+    <text x="1001" y="278" fill="#d6dfcd" font-size="19">Export</text>
+  </g>
+</svg>

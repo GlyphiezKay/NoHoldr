@@ -1,121 +1,63 @@
+<h1 align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="NoHoldr — Your files. Your browser." />
+</h1>
+
 <p align="center">
-  <h1 align="center">NoHoldr</h1>
-  <p align="center"><strong>Browser-based tools for PDFs, images, media, files, and data.</strong></p>
-  <p align="center">Local file processing, with optional Gemini tools.</p>
+  <strong>A browser toolbox for PDFs, images, audio, video, and data.</strong>
+  <br />
+  Process files on your device, with Google Gemini available as an opt-in tool.
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
-  <a href="https://github.com/GlyphiezKay"><img src="https://img.shields.io/badge/Made%20by-GlyphiezKay-purple.svg" alt="Made by GlyphiezKay" /></a>
-  <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16" />
-  <img src="https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript" alt="TypeScript" />
-  <a href="https://github.com/GlyphiezKay/NoHoldr/actions/workflows/ci.yml"><img src="https://github.com/GlyphiezKay/NoHoldr/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
+  <a href="https://noholdr.vercel.app/"><strong>Open NoHoldr</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#toolbox">Toolbox</a>
+  &nbsp;·&nbsp;
+  <a href="#run-locally">Run locally</a>
+  &nbsp;·&nbsp;
+  <a href="#privacy">Privacy</a>
 </p>
 
----
+<p align="center">
+  <a href="https://github.com/GlyphiezKay/NoHoldr/actions/workflows/ci.yml">
+    <img src="https://github.com/GlyphiezKay/NoHoldr/actions/workflows/ci.yml/badge.svg?branch=main" alt="GitHub Actions CI status" />
+  </a>
+</p>
 
-## Why NoHoldr?
+## From source file to result
 
-Most online file tools upload your files to a server. NoHoldr's file-processing tools run **locally in your browser** using Canvas API, Web Audio API, PDF.js, and other browser-native technologies. Optional AI tools send the content you submit directly to Google Gemini using your own API key.
+<img src="./assets/readme/pdf-extract.webp" width="100%" alt="NoHoldr’s Extract PDF Pages workspace. The four-page source PDF is on the left, pages 4 and 2 are selected in that order on the right, and the two-page output is ready to download below." />
 
----
+The example uses a four-page sample PDF. Pick **4** and then **2**, or type `4, 2`, and the new PDF follows that order. Clickable page tiles follow your **Thumbnails** preference and stay usable as numbered buttons when previews are off. [Try Extract PDF](https://noholdr.vercel.app/pdf/extract)
 
-## Tools
+## Toolbox
 
-### 📄 PDF workspace · 36 tools
+| Workspace | What you can do |
+| --- | --- |
+| **[PDF](https://noholdr.vercel.app/pdf)** · 36 tools | Organize pages, compress to a target size, repair PDFs, run English or Indonesian OCR, fill forms, sign, redact, compare pages, and convert documents. |
+| **[Image](https://noholdr.vercel.app/image)** · 17 tools | Batch compress, resize, crop, and convert images. Edit photos, remove a chosen background color, manage metadata, or build an animated GIF. |
+| **[Media](https://noholdr.vercel.app/media)** · 7 tools | Trim or convert audio and video, compress video, extract an audio track, and save a frame. |
+| **[Convert](https://noholdr.vercel.app/convert)** | Start with Smart Convert’s file detection or open a dedicated image, audio, video, or document converter. |
+| **[Files](https://noholdr.vercel.app/files)** · 5 tools | Create and extract ZIPs, preview batch renames, compare files for duplicates, and calculate SHA-256 checksums. |
+| **[Data](https://noholdr.vercel.app/data)** · 16 tools | Format JSON, inspect CSV, preview Markdown, test regex, generate QR codes, and convert timestamps or units. |
+| **[AI](https://noholdr.vercel.app/ai)** · 4 tools | Chat, summarize text, describe images, or generate image metadata with your Gemini API key. |
 
-Open `/pdf` for page organization, target-size compression, OCR in English and Indonesian, repair, image and Office conversion, crop, annotations, AcroForms, password protection, redaction, visual comparison, and PDF workflows.
+<details>
+<summary><strong>Conversion formats</strong></summary>
 
-- **Target size:** the compressor tests multiple quality levels and selects the nearest result it finds without exceeding the chosen size, when possible. Raster compression removes selectable text and interactive elements.
-- **Office input:** Word, Excel, PowerPoint, and local HTML use a browser-only LibreOffice engine. It requires desktop Chromium with WebAssembly JSPI and loads its runtime from the NoHoldr site on first use. The first development or build command prepares the pinned, checksum-verified assets. Documents stay in the browser.
-- **Office output:** DOCX contains editable text, PPTX contains one image per page, and XLSX uses the position of selectable text to infer columns. Review the output for complex layouts.
-- **Text and archive tools:** OCR and extractive summaries run locally. Translation uses the browser’s on-device Translator API when available. PDF/A-2b export flattens pages, and archival copies should be checked with a PDF/A validator.
+| Tool | Output |
+| --- | --- |
+| **Smart Convert** | Image to JPEG, PNG, WebP, or PDF. PDF to JPEG, PNG, or WebP. DOCX to PDF. Audio to WAV. Video to WebM or a JPEG/PNG frame. CSV ↔ JSON. |
+| **Image Converter** | JPEG, PNG, WebP, BMP, AVIF, ICO, single-frame GIF, or raster-backed SVG. |
+| **Audio Converter** | WAV and, where the browser supports encoding, Ogg or WebM with Opus. |
+| **Video Converter** | VP8 or VP9 WebM, JPEG, or PNG. Video controls include bitrate, resolution, and frame rate. |
+| **Document Converter** | Plain text, HTML, Markdown, CSV ↔ JSON, and JSON → XML. |
 
-### 🖼️ Image workspace · 17 tools
+</details>
 
-Open `/image` to find batch compression with a target size, resize, upscale, crop, rotate, format conversion, photo editing, watermarks, memes, animated GIFs, color extraction, images-to-PDF, area masking, color background removal, and metadata tools.
+## Run locally
 
-**Converter formats:** JPEG, PNG, WebP, BMP, GIF stills, raster-backed SVG, ICO, and AVIF. The separate GIF maker combines multiple stills into an animation. Background removal matches a chosen color, and upscaling uses browser resampling. HTML to Image accepts local markup with inline styles and embedded image data.
-
-### 🎵 Media — 7 tools
-
-| Audio | Video |
-|-------|-------|
-| Convert Audio | Convert Video |
-| Trim Audio | Compress Video |
-| Extract Audio | Trim Video |
-| | Extract Video Frame |
-
-**Audio output:** 16-bit or 24-bit PCM WAV with optional mono mix and peak normalization.
-**Video output:** WebM with VP8/VP9 and Opus, plus resolution and bitrate controls for compression. Individual frames export to JPEG or PNG.
-
-### Smart Convert
-
-Drop any file and NoHoldr detects its type, then shows available conversions:
-
-| Input | Available Outputs |
-|-------|-------------------|
-| Image | JPEG, PNG, WebP, PDF |
-| PDF | JPEG, PNG, WebP |
-| Document | DOCX to PDF |
-| Audio | WAV |
-| Video | WebM (VP8/VP9), Frame JPEG, Frame PNG |
-| Data | JSON ↔ CSV |
-
-**Dedicated sub-converters** with advanced controls:
-- `/convert/image` — 8 output formats, quality, resize, ICO sizes, batch ZIP
-- `/convert/audio` — WAV, browser-supported Ogg or WebM, sample rate, bit depth, channels, normalization
-- `/convert/video` — Bitrate, resolution, FPS, and frame extraction by timestamp
-- `/convert/document` — TXT, HTML, Markdown, CSV ↔ JSON, JSON → XML
-
-### 📁 Files — 5 tools
-
-| Tool | Description |
-|------|-------------|
-| Create ZIP | Bundle files into a ZIP archive |
-| Extract ZIP | Unpack ZIP archives |
-| Batch Rename | Rename files with patterns |
-| Find Duplicates | Detect duplicate files by hash |
-| File Hash | Generate file checksums |
-
-### 📊 Data — 16 tools
-
-| Tool | Tool | Tool |
-|------|------|------|
-| JSON Formatter | CSV Viewer | Text Hash |
-| Base64 Encode/Decode | URL Encode/Decode | Text Diff |
-| QR Code Generator | Color Picker | Password Generator |
-| Lorem Ipsum | Markdown Preview | Timestamp Converter |
-| Regex Tester | Word Counter | Unit Converter |
-| Color Extractor | | |
-
-### ✨ AI — 4 tools (opt-in)
-
-| Tool | Description |
-|------|-------------|
-| Chat | Conversational AI assistant |
-| Summarize | Condense long text |
-| Describe Image | AI image analysis |
-| Generate Metadata | Titles, descriptions, keywords |
-
-> AI tools use **your own Gemini API key** with Gemini 3 Flash Preview. Submitted text and images go directly from your browser to Google Gemini.
-
----
-
-## Privacy
-
-| | |
-|---|---|
-| 🔒 **In-Browser** | PDF, image, media, file, and data tools process your inputs locally |
-| 🚫 **No Upload** | File tools do not upload your inputs. Optional Gemini tools send content you submit directly to Google |
-| 🗑️ **Local Storage** | Your optional Gemini API key is stored in this browser |
-| 👤 **No Tracking** | No accounts, no analytics, no cookies |
-
----
-
-## Getting Started
-
-Use Node.js 24 and [pnpm 12.23.0](https://pnpm.io/installation), the version pinned in `package.json`.
+Install **Node.js 24 or later** and [pnpm 12.23.0](https://pnpm.io/installation), the version pinned in [package.json](package.json).
 
 ```bash
 git clone https://github.com/GlyphiezKay/NoHoldr.git
@@ -124,63 +66,27 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The category directories include search. File workspaces have dedicated input, settings, and output panels where applicable. The thumbnail preference is shared across supported workspaces and can be turned off in the header.
+Open [localhost:3000](http://localhost:3000). The first run prepares the browser engines, including the pinned LibreOffice WASM assets. For a local production build, run `pnpm build` and then `pnpm start`.
 
-The first run prepares the browser engines, including checksum-verified LibreOffice WASM assets. Open [NoHoldr on localhost](http://localhost:3000).
+## Browser and format notes
 
-Run the same verification as GitHub Actions:
+- **Office import.** Word, Excel, PowerPoint, and local HTML to PDF use LibreOffice WASM and require desktop Chromium with WebAssembly JSPI support.
+- **Office export.** PDF to Word exports selectable text. Excel infers columns from text positions. PowerPoint uses one page image per slide.
+- **PDF compression.** The target-size mode looks for the closest result it can find under the cap. Raster compression turns pages into images, which removes selectable text and interactive elements.
+- **OCR and archives.** OCR supports English and Indonesian. PDF translation depends on the browser’s on-device Translator API. PDF/A-2b export flattens pages. Validate archival copies against your requirements.
 
-```bash
-pnpm check
-```
+## Privacy
 
-To serve a production build locally, run `pnpm build` followed by `pnpm start`.
+The file tools process inputs in your browser. Local storage holds preferences such as **Thumbnails**, which you can switch off from supported workspaces. AI requests send the text or images you submit directly to Google Gemini using a key stored in your browser. [Privacy model](PRIVACY.md)
 
----
+## Development
 
-## Tech Stack
+NoHoldr uses Next.js, TypeScript, and Tailwind CSS. The main processing engines are PDF.js, pdf-lib, qpdf WASM, Tesseract.js, LibreOffice WASM, Canvas, Web Audio, and MediaRecorder.
 
-| Layer | Technology |
-|-------|------------|
-| **Framework** | Next.js 16 (Turbopack) |
-| **Package manager** | pnpm 12 |
-| **Language** | TypeScript |
-| **Styling** | Tailwind CSS v4 |
-| **Components** | shadcn/ui + Radix UI |
-| **PDF** | pdf-lib, PDF.js, qpdf WASM, Tesseract.js, LibreOffice WASM |
-| **Image** | Canvas API, jSquash AVIF, gifenc, exifr |
-| **Audio/Video** | Web Audio API, MediaRecorder, OfflineAudioContext |
-| **Data** | Web Crypto API (hashing), JSZip |
-| **AI** | Google Gemini (opt-in, BYOK) |
-
----
-
-## Project Structure
-
-```
-src/
-├── app/
-│   ├── pdf/           # PDF workspace and tools
-│   ├── image/         # Image workspace and tools
-│   ├── media/         # 7 audio & video tools
-│   ├── convert/       # Smart Convert + 4 sub-converters
-│   ├── files/         # 5 file utilities
-│   ├── data/          # 16 data & developer tools
-│   └── ai/            # 4 AI tools (Gemini)
-├── components/ui/     # shadcn/ui components
-└── lib/               # Shared utilities
-```
-
----
+`pnpm check` runs the same tests, lint, type checks, and production build as [GitHub Actions](https://github.com/GlyphiezKay/NoHoldr/actions/workflows/ci.yml). Tool routes live in [src/app](src/app), shared components in [src/components](src/components), and processing code in [src/lib](src/lib).
 
 ## License
 
-Licensed under the **MIT License**.
+[MIT](LICENSE) · [Third-party notices](NOTICE) · [GlyphiezKay](https://github.com/GlyphiezKay)
 
-Effective November 25, 2026, the NoHoldr Attribution License (NAL) is retired and no longer applies to this project. It has been replaced by the MIT License; the additional NAL requirements no longer apply.
-
-See [LICENSE](LICENSE) for full terms and [NOTICE](NOTICE) for third-party attributions.
-
----
-
-<p align="center"><strong>NoHoldr</strong> by <a href="https://github.com/GlyphiezKay">GlyphiezKay</a></p>
+NoHoldr adopted the MIT License on November 25, 2026, replacing the former NoHoldr Attribution License.
