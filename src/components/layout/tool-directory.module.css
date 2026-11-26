@@ -76,7 +76,8 @@
 }
 
 .search {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
   min-height: 3.2rem;
   min-width: 0;
   align-items: center;
@@ -93,20 +94,25 @@
   outline-offset: 3px;
 }
 
-.search > svg,
-.search button { flex: none; }
+.search > svg { display: block; }
 
 .search input {
-  flex: 1;
+  appearance: none;
   align-self: stretch;
   width: 100%;
   min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
   outline: none;
+  background: transparent;
   color: var(--foreground);
   font-size: 0.94rem;
+  line-height: 1.4;
 }
 
 .search input::placeholder { color: var(--muted-foreground); }
+.search input::-webkit-search-decoration { appearance: none; }
 .search input::-webkit-search-cancel-button { appearance: none; }
 
 .search button {
